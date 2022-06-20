@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
 module main_top(
-	input C7M,
+    input C7M,
     input OSC_CLK,
     input RESET_n,
     input SW1,
@@ -10,10 +10,10 @@ module main_top(
     input JP4,
     input AS_CPU_n,
     output CLKCPU
-    );
+);
 
 clock clkcontrol(
-	.C7M(C7M),
+    .C7M(C7M),
     .OSC_CLK(OSC_CLK),
     .RESET_n(RESET_n),
     .SW1(SW1),

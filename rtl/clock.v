@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
 module clock(
-	input C7M,
+    input C7M,
     input OSC_CLK,
     input RESET_n,
     input SW1,
@@ -10,7 +10,7 @@ module clock(
     input JP4,
     input AS_CPU_n,
     output CLKCPU
-    );
+);
 
 reg [3:0] clksel0 = 4'b0001;
 reg [3:0] clksel1 = 4'b0001;
@@ -32,9 +32,9 @@ assign CLKCPU = cpu_speed_switch ? C7M : clk_turbo;
 
 always @(posedge C7M) begin
 
-	if (AS_CPU_n) begin
-		cpu_speed_switch <= SW1;
-	end
+    if (AS_CPU_n) begin
+        cpu_speed_switch <= SW1;
+    end
 
     case (clksel)
 

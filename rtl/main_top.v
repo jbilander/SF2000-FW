@@ -2,23 +2,26 @@
 
 module main_top(
 	input C7M,
-	input CDAC,
     input OSC_CLK,
-	output CLKCPU,
-    output reg TEST = 1'b1,
-    output reg TEST2 = 1'b1
+    input RESET_n,
+    input SW1,
+    input JP2,
+    input JP3,
+    input JP4,
+    input AS_CPU_n,
+    output CLKCPU
     );
 
-wire C14M = C7M ^ CDAC;
-
-assign CLKCPU = C14M;
- 
-always @(posedge C14M) begin
-	TEST <= ~TEST;
-end
-
-always @(posedge OSC_CLK) begin
-	TEST2 <= ~TEST2;
-end
+clock clkcontrol(
+	.C7M(C7M),
+    .OSC_CLK(OSC_CLK),
+    .RESET_n(RESET_n),
+    .SW1(SW1),
+    .JP2(JP2),
+    .JP3(JP3),
+    .JP4(JP4),
+    .AS_CPU_n(AS_CPU_n),
+    .CLKCPU(CLKCPU)
+);
 
 endmodule

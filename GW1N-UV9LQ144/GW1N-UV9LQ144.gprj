@@ -5,8 +5,13 @@
     <Version>5</Version>
     <Device name="GW1N-9" pn="GW1N-UV9LQ144C6/I5">gw1n9-026</Device>
     <FileList>
+        <File path="../rtl/clock.v" type="file.verilog" enable="1"/>
+        <File path="../rtl/gowin_clkdiv_100M_to_28M.v" type="file.verilog" enable="1"/>
+        <File path="../rtl/gowin_dcs.v" type="file.verilog" enable="1"/>
+        <File path="../rtl/gowin_rpll_14x.v" type="file.verilog" enable="1"/>
+        <File path="../rtl/gowin_rpll_6x.v" type="file.verilog" enable="1"/>
         <File path="../rtl/main_top.v" type="file.verilog" enable="1"/>
         <File path="../rtl/testbench.v" type="file.verilog" enable="0"/>
-        <File path="src/GW1N-UV9LQ144.cst" type="file.cst" enable="1"/>
+        <File path="../GW1N-UV9LQ144.cst" type="file.cst" enable="1"/>
     </FileList>
 </Project>

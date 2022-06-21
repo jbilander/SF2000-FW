@@ -9,8 +9,14 @@ module main_top(
     input JP3,
     input JP4,
     input AS_CPU_n,
-    output CLKCPU
+    input VPA_n,
+    input [2:0] FC,
+    output CLKCPU,
+    output E,
+    output VMA_n
 );
+
+wire m6800_dtack_n;
 
 clock clkcontrol(
     .C7M(C7M),
@@ -22,6 +28,17 @@ clock clkcontrol(
     .JP4(JP4),
     .AS_CPU_n(AS_CPU_n),
     .CLKCPU(CLKCPU)
+);
+
+m6800 m6800_bus(
+	.C7M(C7M),
+	.RESET_n(RESET_n),
+	.VPA_n(VPA_n),
+	.CPUSPACE(&FC),
+	.AS_CPU_n(AS_CPU_n),
+	.E(E),
+	.VMA_n(VMA_n),
+	.M6800_DTACK_n(m6800_dtack_n)
 );
 
 endmodule

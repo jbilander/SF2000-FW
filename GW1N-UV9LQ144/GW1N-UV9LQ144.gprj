@@ -10,6 +10,7 @@
         <File path="../rtl/gowin_dcs.v" type="file.verilog" enable="1"/>
         <File path="../rtl/gowin_rpll_14x.v" type="file.verilog" enable="1"/>
         <File path="../rtl/gowin_rpll_6x.v" type="file.verilog" enable="1"/>
+        <File path="../rtl/m6800.v" type="file.verilog" enable="1"/>
         <File path="../rtl/main_top.v" type="file.verilog" enable="1"/>
         <File path="../rtl/testbench.v" type="file.verilog" enable="0"/>
         <File path="../GW1N-UV9LQ144.cst" type="file.cst" enable="1"/>

@@ -27,6 +27,7 @@ wire C28M;
 wire C33M;
 wire C42M;
 wire C50M;
+wire C100M;
 
 assign CLKCPU = cpu_speed_switch ? C7M : clk_turbo;
 

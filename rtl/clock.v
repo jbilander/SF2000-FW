@@ -38,18 +38,18 @@ always @(posedge C7M) begin
 
     case (clksel)
 
-      3'b000: clksel0 = 4'b0001; //C7M
-      3'b001: clksel0 = 4'b0010; //C14M
-      3'b010: clksel0 = 4'b0100; //C21M
-      3'b011: clksel0 = 4'b1000; //C28M
-      3'b100: clksel1 = 4'b0001; //C33M
-      3'b101: clksel1 = 4'b0010; //C42M
-      3'b110: clksel1 = 4'b0100; //C50M
-      3'b111: clksel1 = 4'b1000; //Oscillator CLK (X1)
+      3'b000: clksel0 <= 4'b0001; //C7M
+      3'b001: clksel0 <= 4'b0010; //C14M
+      3'b010: clksel0 <= 4'b0100; //C21M
+      3'b011: clksel0 <= 4'b1000; //C28M
+      3'b100: clksel1 <= 4'b0001; //C33M
+      3'b101: clksel1 <= 4'b0010; //C42M
+      3'b110: clksel1 <= 4'b0100; //C50M
+      3'b111: clksel1 <= 4'b1000; //Oscillator CLK
 
       default: begin
-                clksel0 = 4'b0001; //C7M
-                clksel1 = 4'b0001; //C33M
+                clksel0 <= 4'b0001; //C7M
+                clksel1 <= 4'b0001; //C33M
                end
 
     endcase

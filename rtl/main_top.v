@@ -31,14 +31,14 @@ clock clkcontrol(
 );
 
 m6800 m6800_bus(
-	.C7M(C7M),
-	.RESET_n(RESET_n),
-	.VPA_n(VPA_n),
-	.CPUSPACE(&FC),
-	.AS_CPU_n(AS_CPU_n),
-	.E(E),
-	.VMA_n(VMA_n),
-	.M6800_DTACK_n(m6800_dtack_n)
+    .C7M(C7M),
+    .RESET_n(RESET_n),
+    .VPA_n(VPA_n),
+    .CPUSPACE(&FC),
+    .AS_CPU_n(AS_CPU_n),
+    .E(E),
+    .VMA_n(VMA_n),
+    .M6800_DTACK_n(m6800_dtack_n)
 );
 
 endmodule

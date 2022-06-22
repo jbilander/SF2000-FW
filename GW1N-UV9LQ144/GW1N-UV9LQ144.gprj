@@ -5,6 +5,7 @@
     <Version>5</Version>
     <Device name="GW1N-9" pn="GW1N-UV9LQ144C6/I5">gw1n9-026</Device>
     <FileList>
+        <File path="../rtl/autoconfig_zii.v" type="file.verilog" enable="1"/>
         <File path="../rtl/clock.v" type="file.verilog" enable="1"/>
         <File path="../rtl/gowin_clkdiv_100M_to_28M.v" type="file.verilog" enable="1"/>
         <File path="../rtl/gowin_dcs.v" type="file.verilog" enable="1"/>

@@ -89,33 +89,33 @@ always @(negedge RESET_n or posedge C7M) begin
                         if (config_out_n == CONFIGURING_IDE) data_out <= 4'b0001;                 // (02) 64KB
                     end
                     6'h02: begin
-                        if (config_out_n == CONFIGURING_RAM) data_out <= ~RAM_PROD_ID[7:4]; // (04) Product number RAM
-                        if (config_out_n == CONFIGURING_IDE) data_out <= ~IDE_PROD_ID[7:4];	// (04) Product number IDE
+                        if (config_out_n == CONFIGURING_RAM) data_out <= ~RAM_PROD_ID[7:4];       // (04) Product number RAM
+                        if (config_out_n == CONFIGURING_IDE) data_out <= ~IDE_PROD_ID[7:4];       // (04) Product number IDE
                     end
                     6'h03: begin
-                        if (config_out_n == CONFIGURING_RAM) data_out <= ~RAM_PROD_ID[3:0];	// (06) Product number RAM
-                        if (config_out_n == CONFIGURING_IDE) data_out <= ~IDE_PROD_ID[3:0];	// (06) Product number IDE
+                        if (config_out_n == CONFIGURING_RAM) data_out <= ~RAM_PROD_ID[3:0];       // (06) Product number RAM
+                        if (config_out_n == CONFIGURING_IDE) data_out <= ~IDE_PROD_ID[3:0];       // (06) Product number IDE
                     end
 
-                    6'h04: 	data_out <= ~4'b1100;           // (08) 1100 Board can be shut up and has preference to be put in 8 Meg space.
-                    6'h05: 	data_out <= ~4'b0000;           // (0A) 0000 Reserved
+                    6'h04: data_out <= ~4'b1100;             // (08) 1100 Board can be shut up and has preference to be put in 8 Meg space.
+                    6'h05: data_out <= ~4'b0000;             // (0A) 0000 Reserved
 
-                    6'h08: 	data_out <= ~MFG_ID[15:12];     // (10) Manufacturer ID
-                    6'h09: 	data_out <= ~MFG_ID[11:8];      // (12) Manufacturer ID
-                    6'h0A:   data_out <= ~MFG_ID[7:4];      // (14) Manufacturer ID
-                    6'h0B:   data_out <= ~MFG_ID[3:0];      // (16) Manufacturer ID
+                    6'h08: data_out <= ~MFG_ID[15:12];       // (10) Manufacturer ID
+                    6'h09: data_out <= ~MFG_ID[11:8];        // (12) Manufacturer ID
+                    6'h0A: data_out <= ~MFG_ID[7:4];         // (14) Manufacturer ID
+                    6'h0B: data_out <= ~MFG_ID[3:0];         // (16) Manufacturer ID
 
                     /*
-                    6'h0C: 	data_out <= 4'hF;               // (18) Serial number, byte 0 (msb)
-                    6'h0D:	data_out <= 4'hF;               // (1A) ----------"----------
-                    6'h0E:	data_out <= 4'hF;               // (1C) Serial number, byte 1
-                    6'h0F:	data_out <= 4'hF;               // (1E) ----------"----------
+                    6'h0C: data_out <= 4'hF;                 // (18) Serial number, byte 0 (msb)
+                    6'h0D: data_out <= 4'hF;                 // (1A) ----------"----------
+                    6'h0E: data_out <= 4'hF;                 // (1C) Serial number, byte 1
+                    6'h0F: data_out <= 4'hF;                 // (1E) ----------"----------
                     */
 
-                    6'h10:	data_out <= ~SERIAL[15:12];     // (20) Serial number, byte 2
-                    6'h11:	data_out <= ~SERIAL[11:8];      // (22) ----------"----------
-                    6'h12:	data_out <= ~SERIAL[7:4];       // (24) Serial number, byte 3 (lsb)
-                    6'h13:	data_out <= ~SERIAL[3:0];       // (26) ----------"----------
+                    6'h10: data_out <= ~SERIAL[15:12];       // (20) Serial number, byte 2
+                    6'h11: data_out <= ~SERIAL[11:8];        // (22) ----------"----------
+                    6'h12: data_out <= ~SERIAL[7:4];         // (24) Serial number, byte 3 (lsb)
+                    6'h13: data_out <= ~SERIAL[3:0];         // (26) ----------"----------
 					
                     /*
                     //Optional ROM vector, these two bytes are the offset from the board's base address
@@ -125,8 +125,8 @@ always @(negedge RESET_n or posedge C7M) begin
                     */
                     6'h17: if (config_out_n == CONFIGURING_IDE) data_out <= ~4'b0001;   // (2E) Rom vector low byte low nybble
 
-                    6'h20:	data_out <= 4'd0;               // (40) Because this card does not generate INT's
-                    6'h21:	data_out <= 4'd0;               // (42) Because this card does not generate INT's
+                    6'h20: data_out <= 4'd0;                 // (40) Because this card does not generate INT's
+                    6'h21: data_out <= 4'd0;                 // (42) Because this card does not generate INT's
 
                     default: data_out <= 4'hF;
 

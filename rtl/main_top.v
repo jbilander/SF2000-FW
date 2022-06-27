@@ -12,6 +12,7 @@ module main_top(
     input JP4,
     input JP6,
     input JP7,
+    input JP8,
     input RW_n,
     input UDS_n,
     input LDS_n,
@@ -31,6 +32,8 @@ module main_top(
     output WE_BANK1_EVEN_n,
     output ROM_OE_n,
     output ROM_WE_n,
+    output ROM_B1,
+    output ROM_B2,
     output IDE_IOR_n,
     output IDE_IOW_n,
     output [1:0] IDE_CS_n,
@@ -46,9 +49,11 @@ JP4: Turbo speed selector
 JP5: generate E-CLK
 JP6: 4/8 MB
 JP7: Autoboot IDE
+JP8: Oktagon/Oktapus. IDE-driver
 */
 
 reg rom_write_enable_n = 1'b1;  // Write to ROM disabled by default.
+reg rom_b2_value = 1'b0;
 
 wire ds_n = LDS_n & UDS_n;      // Data Strobe
 wire m6800_dtack_n;
@@ -64,6 +69,8 @@ wire ide_access;                // keeps track if the IDE is being accessed.
 //TODO: Allow for bus arbitration, DMA from A590, GVP or similar.
 assign AS_MB_n = AS_CPU_n;
 assign ROM_WE_n = rom_write_enable_n;
+assign ROM_B1 = JP8 ? 1'b1 : 1'b0;
+assign ROM_B2 = rom_b2_value;
 
 clock clkcontrol(
     .C7M(C7M),

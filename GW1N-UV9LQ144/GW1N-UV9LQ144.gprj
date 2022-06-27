@@ -7,6 +7,7 @@
     <FileList>
         <File path="../rtl/autoconfig_zii.v" type="file.verilog" enable="1"/>
         <File path="../rtl/clock.v" type="file.verilog" enable="1"/>
+        <File path="../rtl/fastram.v" type="file.verilog" enable="1"/>
         <File path="../rtl/gowin_clkdiv_100M_to_28M.v" type="file.verilog" enable="1"/>
         <File path="../rtl/gowin_dcs.v" type="file.verilog" enable="1"/>
         <File path="../rtl/gowin_rpll_14x.v" type="file.verilog" enable="1"/>

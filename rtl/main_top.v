@@ -22,6 +22,13 @@ module main_top(
     output CLKCPU,
     output E,
     output VMA_n,
+    output AS_MB_n,
+    output OE_BANK0_n,
+    output OE_BANK1_n,
+    output WE_BANK0_ODD_n,
+    output WE_BANK1_ODD_n,
+    output WE_BANK0_EVEN_n,
+    output WE_BANK1_EVEN_n,
     inout [15:0] D
 );
 
@@ -42,9 +49,14 @@ wire [7:5] base_ram;        // base address for the RAM_CARD in Z2-space. (A23-A
 wire [7:0] base_ide;        // base address for the IDE_CARD in Z2-space. (A23-A16)
 
 wire ram_configured_n;      // keeps track if RAM_CARD is autoconfigured ok.
-//wire ram_access;            // keeps track if local SRAM is being accessed.
+wire ram_access;            // keeps track if local SRAM is being accessed.
 wire ide_configured_n;      // keeps track if IDE_CARD is autoconfigured ok.
 //wire ide_access;            // keeps track if the IDE is being accessed.
+
+
+//TODO: Allow for bus arbitration, DMA from A590, GVP or similar.
+assign AS_MB_n = AS_CPU_n;
+
 
 clock clkcontrol(
     .C7M(C7M),
@@ -86,6 +98,25 @@ autoconfig_zii autoconfig(
     .RAM_CONFIGURED_n(ram_configured_n),
     .IDE_CONFIGURED_n(ide_configured_n),
     .CFGOUT_n(CFGOUT_n)
+);
+
+fastram ramcontrol(
+    .A(A[23:21]),
+    .JP6(JP6),
+    .RW_n(RW_n),
+    .UDS_n(UDS_n),
+    .LDS_n(LDS_n),
+    .AS_n(AS_CPU_n),
+    .DS_n(ds_n),
+    .BASE_RAM(base_ram[7:5]),
+    .RAM_CONFIGURED_n(ram_configured_n),
+    .OE_BANK0_n(OE_BANK0_n),
+    .OE_BANK1_n(OE_BANK1_n),
+    .WE_BANK0_ODD_n(WE_BANK0_ODD_n),
+    .WE_BANK1_ODD_n(WE_BANK1_ODD_n),
+    .WE_BANK0_EVEN_n(WE_BANK0_EVEN_n),
+    .WE_BANK1_EVEN_n(WE_BANK1_EVEN_n),
+    .RAM_ACCESS(ram_access)
 );
 
 endmodule

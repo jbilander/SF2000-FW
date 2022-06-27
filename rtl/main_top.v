@@ -29,6 +29,11 @@ module main_top(
     output WE_BANK1_ODD_n,
     output WE_BANK0_EVEN_n,
     output WE_BANK1_EVEN_n,
+    output ROM_OE_n,
+    output ROM_WE_n,
+    output IDE_IOR_n,
+    output IDE_IOW_n,
+    output [1:0] IDE_CS_n,
     inout [15:0] D
 );
 
@@ -43,20 +48,22 @@ JP6: 4/8 MB
 JP7: Autoboot IDE
 */
 
-wire ds_n = LDS_n & UDS_n;  //Data Strobe
-wire m6800_dtack_n;
-wire [7:5] base_ram;        // base address for the RAM_CARD in Z2-space. (A23-A21)
-wire [7:0] base_ide;        // base address for the IDE_CARD in Z2-space. (A23-A16)
+reg rom_write_enable_n = 1'b1;  // Write to ROM disabled by default.
 
-wire ram_configured_n;      // keeps track if RAM_CARD is autoconfigured ok.
-wire ram_access;            // keeps track if local SRAM is being accessed.
-wire ide_configured_n;      // keeps track if IDE_CARD is autoconfigured ok.
-//wire ide_access;            // keeps track if the IDE is being accessed.
+wire ds_n = LDS_n & UDS_n;      // Data Strobe
+wire m6800_dtack_n;
+wire [7:5] base_ram;            // base address for the RAM_CARD in Z2-space. (A23-A21)
+wire [7:0] base_ide;            // base address for the IDE_CARD in Z2-space. (A23-A16)
+
+wire ram_configured_n;          // keeps track if RAM_CARD is autoconfigured ok.
+wire ram_access;                // keeps track if local SRAM is being accessed.
+wire ide_configured_n;          // keeps track if IDE_CARD is autoconfigured ok.
+wire ide_access;                // keeps track if the IDE is being accessed.
 
 
 //TODO: Allow for bus arbitration, DMA from A590, GVP or similar.
 assign AS_MB_n = AS_CPU_n;
-
+assign ROM_WE_n = rom_write_enable_n;
 
 clock clkcontrol(
     .C7M(C7M),
@@ -117,6 +124,23 @@ fastram ramcontrol(
     .WE_BANK0_EVEN_n(WE_BANK0_EVEN_n),
     .WE_BANK1_EVEN_n(WE_BANK1_EVEN_n),
     .RAM_ACCESS(ram_access)
+);
+
+ata idecontrol(
+    .CLKCPU(CLKCPU),
+    .RESET_n(RESET_n),
+    .A_HIGH(A[23:16]),
+    .A12(A[12]),
+    .A13(A[13]),
+    .RW_n(RW_n),
+    .AS_CPU_n(AS_CPU_n),
+    .BASE_IDE(base_ide[7:0]),
+    .IDE_CONFIGURED_n(ide_configured_n),
+    .ROM_OE_n(ROM_OE_n),
+    .IDE_IOR_n(IDE_IOR_n),
+    .IDE_IOW_n(IDE_IOW_n),
+    .IDE_CS_n(IDE_CS_n[1:0]),
+    .IDE_ACCESS(ide_access)
 );
 
 endmodule

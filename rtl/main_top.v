@@ -10,6 +10,7 @@ module main_top(
     input JP2,
     input JP3,
     input JP4,
+    input JP5,
     input JP6,
     input JP7,
     input JP8,
@@ -21,7 +22,7 @@ module main_top(
     input AS_CPU_n,
     output CFGOUT_n,
     output CLKCPU,
-    output E,
+    output SPI_CS,
     output VMA_n,
     output AS_MB_n,
     output OE_BANK0_n,
@@ -37,6 +38,7 @@ module main_top(
     output IDE_IOR_n,
     output IDE_IOW_n,
     output [1:0] IDE_CS_n,
+    inout E,
     inout [15:0] D
 );
 
@@ -54,6 +56,7 @@ JP8: Oktagon/Oktapus. IDE-driver
 
 reg rom_write_enable_n = 1'b1;  // Write to ROM disabled by default.
 reg rom_b2_value = 1'b0;
+reg spics = 1'b1;
 
 wire ds_n = LDS_n & UDS_n;      // Data Strobe
 wire m6800_dtack_n;
@@ -71,6 +74,7 @@ assign AS_MB_n = AS_CPU_n;
 assign ROM_WE_n = rom_write_enable_n;
 assign ROM_B1 = JP8 ? 1'b1 : 1'b0;
 assign ROM_B2 = rom_b2_value;
+assign SPI_CS = spics;
 
 clock clkcontrol(
     .C7M(C7M),
@@ -86,6 +90,7 @@ clock clkcontrol(
 
 m6800 m6800_bus(
     .C7M(C7M),
+    .JP5(JP5),
     .RESET_n(RESET_n),
     .VPA_n(VPA_n),
     .CPUSPACE(&FC),

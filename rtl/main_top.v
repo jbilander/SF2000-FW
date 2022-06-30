@@ -20,9 +20,10 @@ module main_top(
     input VPA_n,
     input [2:0] FC,
     input AS_CPU_n,
+    input DTACK_MB_n,
     output CFGOUT_n,
     output CLKCPU,
-    output SPI_CS,
+    output SPI_CS_n,
     output VMA_n,
     output AS_MB_n,
     output OE_BANK0_n,
@@ -38,6 +39,8 @@ module main_top(
     output IDE_IOR_n,
     output IDE_IOW_n,
     output [1:0] IDE_CS_n,
+    output OVR_n,
+    output DTACK_CPU_n,
     inout E,
     inout [15:0] D
 );
@@ -56,10 +59,9 @@ JP8: Oktagon/Oktapus. IDE-driver
 
 reg rom_write_enable_n = 1'b1;  // Write to ROM disabled by default.
 reg rom_b2_value = 1'b0;
-reg spics = 1'b1;
+reg spics_n = 1'b1;
 
 wire ds_n = LDS_n & UDS_n;      // Data Strobe
-wire m6800_dtack_n;
 wire [7:5] base_ram;            // base address for the RAM_CARD in Z2-space. (A23-A21)
 wire [7:0] base_ide;            // base address for the IDE_CARD in Z2-space. (A23-A16)
 
@@ -68,13 +70,20 @@ wire ram_access;                // keeps track if local SRAM is being accessed.
 wire ide_configured_n;          // keeps track if IDE_CARD is autoconfigured ok.
 wire ide_access;                // keeps track if the IDE is being accessed.
 
+//Handle DTACK
+wire fast_dtack_n = !AS_CPU_n && (ram_access || ide_access) ? 1'b0 : 1'b1;
+wire m6800_dtack_n;
+assign DTACK_CPU_n = DTACK_MB_n & m6800_dtack_n & fast_dtack_n;
+assign OVR_n = fast_dtack_n;
 
-//TODO: Allow for bus arbitration, DMA from A590, GVP or similar.
-assign AS_MB_n = AS_CPU_n;
 assign ROM_WE_n = rom_write_enable_n;
 assign ROM_B1 = JP8 ? 1'b1 : 1'b0;
 assign ROM_B2 = rom_b2_value;
-assign SPI_CS = spics;
+assign SPI_CS_n = spics_n;
+
+//TODO: Allow for bus arbitration, DMA from A590, GVP or similar.
+assign AS_MB_n = AS_CPU_n;
+
 
 clock clkcontrol(
     .C7M(C7M),

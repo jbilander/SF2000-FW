@@ -3,7 +3,7 @@
 <Project>
     <Template>FPGA</Template>
     <Version>5</Version>
-    <Device name="GW1N-9" pn="GW1N-UV9LQ144C6/I5">gw1n9-026</Device>
+    <Device name="GW1N-9C" pn="GW1N-UV9LQ144C6/I5">gw1n9c-019</Device>
     <FileList>
         <File path="../rtl/ata.v" type="file.verilog" enable="1"/>
         <File path="../rtl/autoconfig_zii.v" type="file.verilog" enable="1"/>

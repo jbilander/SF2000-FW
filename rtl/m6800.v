@@ -12,8 +12,12 @@ module m6800(
     output reg M6800_DTACK_n = 1'b1
 );
 
+reg a = 1'b1;
+reg [3:0] b;
+wire [3:0] cnt = a + b;     //counter for incoming E (JP5 open)
+
 reg ECLK = 1'b1;
-reg [3:0] e_counter = 'd5;
+reg [3:0] e_counter = 'd5;  //counter for generating E (JP5 closed)
 
 assign E = JP5 ? 1'bZ : ECLK;
 
@@ -32,6 +36,22 @@ always @(negedge C7M) begin
 	
 end
 
+always @(negedge E) begin
+    a <= 1'b0;
+end
+
+always @(posedge C7M) begin
+
+    if (!a) begin
+        if (cnt == 'd9) begin
+            b <= 'd0;
+        end else begin
+            b <= b + 'd1;
+        end
+    end
+
+end
+
 // Determine if current Bus Cycle is a 6800 type where VPA has been asserted.
 always @(negedge RESET_n or negedge C7M or posedge VPA_n) begin
 	
@@ -48,7 +68,7 @@ always @(negedge RESET_n or negedge C7M or posedge VPA_n) begin
                     VMA_n <= CPUSPACE;
                 end
             end else begin
-                if (!E) begin
+                if (cnt == 'd3) begin
                     VMA_n <= CPUSPACE;
                 end
             end
@@ -75,7 +95,7 @@ always @(negedge RESET_n or negedge C7M or posedge AS_CPU_n) begin
                     M6800_DTACK_n <= VMA_n;
                 end
             end else begin
-                if (E) begin
+                if (cnt == 'd9) begin
                     M6800_DTACK_n <= VMA_n;
                 end
             end

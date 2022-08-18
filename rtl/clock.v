@@ -4,23 +4,22 @@ module clock(
     input C7M,
     input OSC_CLK,
     input RESET_n,
-    input SW1,
+    input CPU_SPEED_SWITCH,
     input JP2,
     input JP3,
     input JP4,
     input AS_CPU_n,
+    input DTACK_CPU_n,
     output CLKCPU
 );
 
 reg [3:0] clksel0 = 4'b0001;
 reg [3:0] clksel1 = 4'b0001;
-reg cpu_speed_switch = 1'b1;
 
 wire [2:0] clksel = {JP2, JP3, JP4};
 wire dcs0_out; //dynamic clock selector 0
 wire dcs1_out; //dynamic clock selector 1
-wire clk_turbo = JP2 ? dcs0_out : dcs1_out;
-wire RESET = !RESET_n;
+wire clk_turbo = JP2 ? dcs1_out : dcs0_out;
 wire C14M;
 wire C21M;
 wire C28M;
@@ -29,13 +28,9 @@ wire C42M;
 wire C50M;
 wire C100M;
 
-assign CLKCPU = cpu_speed_switch ? C7M : clk_turbo;
+assign CLKCPU = CPU_SPEED_SWITCH ? C7M : clk_turbo;
 
 always @(posedge C7M) begin
-
-    if (AS_CPU_n) begin
-        cpu_speed_switch <= SW1;
-    end
 
     case (clksel)
 
@@ -59,22 +54,22 @@ end
 
 //dynamic clock selector (DCS)
 Gowin_DCS dcs0(
-    .clkout(dcs0_out), //output clkout
-    .clksel(clksel0), //input [3:0] clksel
-    .clk0(C7M), //input clk0
-    .clk1(C14M), //input clk1
-    .clk2(C21M), //input clk2
-    .clk3(C28M) //input clk3
+    .clkout(dcs0_out),  //output clkout
+    .clksel(clksel0),   //input [3:0] clksel
+    .clk0(C7M),         //input 4'b0001
+    .clk1(C14M),        //input 4'b0010
+    .clk2(C21M),        //input 4'b0100
+    .clk3(C28M)         //input 4'b1000
 );
 
 //dynamic clock selector (DCS)
 Gowin_DCS dcs1(
-    .clkout(dcs1_out), //output clkout
-    .clksel(clksel1), //input [3:0] clksel
-    .clk0(C33M), //input clk0
-    .clk1(C42M), //input clk1
-    .clk2(C50M), //input clk2
-    .clk3(OSC_CLK) //input clk3
+    .clkout(dcs1_out),  //output clkout
+    .clksel(clksel1),   //input [3:0] clksel
+    .clk0(C33M),        //input 4'b0001
+    .clk1(C42M),        //input 4'b0010
+    .clk2(C50M),        //input 4'b0100
+    .clk3(OSC_CLK)      //input 4'b1000
 );
 
 //PLL
@@ -82,7 +77,7 @@ Gowin_rPLL_6x gen_C14M_C21M_and_C42M(
     .clkout(C42M),
     .clkoutd(C21M),
     .clkoutd3(C14M),
-    .reset(RESET),
+    .reset(!RESET_n),
     .clkin(C7M)
 );
 
@@ -91,7 +86,7 @@ Gowin_rPLL_14x gen_C50M_and_C33M(
     .clkout(C100M),
     .clkoutd(C50M),
     .clkoutd3(C33M),
-    .reset(RESET),
+    .reset(!RESET_n),
     .clkin(C7M)
 );
 

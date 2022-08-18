@@ -12,15 +12,15 @@ module m6800(
     output reg M6800_DTACK_n = 1'b1
 );
 
-reg a = 1'b1;
-reg [3:0] b;
-wire [3:0] cnt = a + b;     //counter for incoming E (JP5 open)
+reg e = 1'b1;               //used for syncing e_cnt (JP5 open)
+reg [3:0] e_cnt;            //counter for incoming E (JP5 open)
 
-reg ECLK = 1'b1;
+reg ECLK = 1'b1;            //used for gen. outgoing E (JP5 closed)
 reg [3:0] e_counter = 'd5;  //counter for generating E (JP5 closed)
 
 assign E = JP5 ? 1'bZ : ECLK;
 
+//This is a counter for generating E (JP5 closed)
 always @(negedge C7M) begin
 
     if (e_counter == 'd5) begin
@@ -36,17 +36,19 @@ always @(negedge C7M) begin
 	
 end
 
+//syncs e_cnt on falling edge of incoming E (JP5 open)
 always @(negedge E) begin
-    a <= 1'b0;
+    e <= 1'b0;
 end
 
+//This is for when incoming E is being used (JP5 open)
 always @(posedge C7M) begin
 
-    if (!a) begin
-        if (cnt == 'd9) begin
-            b <= 'd0;
+    if (!e) begin
+        if (e_cnt == 'd9) begin
+            e_cnt <= 'd0;
         end else begin
-            b <= b + 'd1;
+            e_cnt <= e_cnt + 'd1;
         end
     end
 
@@ -68,13 +70,12 @@ always @(negedge RESET_n or negedge C7M or posedge VPA_n) begin
                     VMA_n <= CPUSPACE;
                 end
             end else begin
-                if (cnt == 'd3) begin
+                if (e_cnt == 'd3) begin
                     VMA_n <= CPUSPACE;
                 end
             end
 
         end
-
     end
 
 end
@@ -95,7 +96,7 @@ always @(negedge RESET_n or negedge C7M or posedge AS_CPU_n) begin
                     M6800_DTACK_n <= VMA_n;
                 end
             end else begin
-                if (cnt == 'd9) begin
+                if (e_cnt == 'd9) begin
                     M6800_DTACK_n <= VMA_n;
                 end
             end

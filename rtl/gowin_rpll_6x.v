@@ -59,6 +59,6 @@ defparam rpll_inst.CLKOUTD_BYPASS = "false";
 defparam rpll_inst.DYN_SDIV_SEL = 2;
 defparam rpll_inst.CLKOUTD_SRC = "CLKOUT";
 defparam rpll_inst.CLKOUTD3_SRC = "CLKOUT";
-defparam rpll_inst.DEVICE = "GW1N-9";
+defparam rpll_inst.DEVICE = "GW1N-9C";
 
 endmodule //Gowin_rPLL_6x

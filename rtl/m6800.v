@@ -42,7 +42,7 @@ always @(negedge E) begin
 end
 
 //This is for when incoming E is being used (JP5 open)
-always @(posedge C7M) begin
+always @(negedge C7M) begin
 
     if (!e) begin
         if (e_cnt == 'd9) begin

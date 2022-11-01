@@ -3,15 +3,14 @@
 //File Title: IP file
 //GOWIN Version: V1.9.8.05
 //Part Number: GW1N-UV9LQ144C6/I5
-//Device: GW1N-9
-//Created Time: Mon Jun 20 15:12:39 2022
+//Device: GW1N-9C
+//Created Time: Tue Nov 01 17:28:22 2022
 
-module Gowin_rPLL_14x (clkout, clkoutd, clkoutd3, reset, clkin);
+module Gowin_rPLL (clkout, clkoutd, clkoutd3, clkin);
 
 output clkout;
 output clkoutd;
 output clkoutd3;
-input reset;
 input clkin;
 
 wire lock_o;
@@ -26,7 +25,7 @@ rPLL rpll_inst (
     .CLKOUTP(clkoutp_o),
     .CLKOUTD(clkoutd),
     .CLKOUTD3(clkoutd3),
-    .RESET(reset),
+    .RESET(gw_gnd),
     .RESET_P(gw_gnd),
     .CLKIN(clkin),
     .CLKFB(gw_gnd),
@@ -38,13 +37,13 @@ rPLL rpll_inst (
     .FDLY({gw_gnd,gw_gnd,gw_gnd,gw_gnd})
 );
 
-defparam rpll_inst.FCLKIN = "7.09";
+defparam rpll_inst.FCLKIN = "100";
 defparam rpll_inst.DYN_IDIV_SEL = "false";
 defparam rpll_inst.IDIV_SEL = 0;
 defparam rpll_inst.DYN_FBDIV_SEL = "false";
-defparam rpll_inst.FBDIV_SEL = 13;
+defparam rpll_inst.FBDIV_SEL = 0;
 defparam rpll_inst.DYN_ODIV_SEL = "false";
-defparam rpll_inst.ODIV_SEL = 8;
+defparam rpll_inst.ODIV_SEL = 4;
 defparam rpll_inst.PSDA_SEL = "0000";
 defparam rpll_inst.DYN_DA_EN = "true";
 defparam rpll_inst.DUTYDA_SEL = "1000";
@@ -53,12 +52,12 @@ defparam rpll_inst.CLKOUTP_FT_DIR = 1'b1;
 defparam rpll_inst.CLKOUT_DLY_STEP = 0;
 defparam rpll_inst.CLKOUTP_DLY_STEP = 0;
 defparam rpll_inst.CLKFB_SEL = "internal";
-defparam rpll_inst.CLKOUT_BYPASS = "false";
+defparam rpll_inst.CLKOUT_BYPASS = "true";
 defparam rpll_inst.CLKOUTP_BYPASS = "false";
-defparam rpll_inst.CLKOUTD_BYPASS = "false";
+defparam rpll_inst.CLKOUTD_BYPASS = "true";
 defparam rpll_inst.DYN_SDIV_SEL = 2;
 defparam rpll_inst.CLKOUTD_SRC = "CLKOUT";
 defparam rpll_inst.CLKOUTD3_SRC = "CLKOUT";
 defparam rpll_inst.DEVICE = "GW1N-9C";
 
-endmodule //Gowin_rPLL_14x
+endmodule //Gowin_rPLL

@@ -2,7 +2,7 @@
 
 module clock(
     input C7M,
-    input OSC_CLK,
+    input OSC_CLK_X1,
     input RESET_n,
     input CPU_SPEED_SWITCH,
     input JP2,
@@ -69,7 +69,7 @@ Gowin_DCS dcs1(
     .clk0(C33M),        //input 4'b0001
     .clk1(C42M),        //input 4'b0010
     .clk2(C50M),        //input 4'b0100
-    .clk3(OSC_CLK)      //input 4'b1000
+    .clk3(OSC_CLK_X1)   //input 4'b1000
 );
 
 //PLL
@@ -81,19 +81,19 @@ Gowin_rPLL_6x gen_C14M_C21M_and_C42M(
     .clkin(C7M)
 );
 
-//PLL
-Gowin_rPLL_14x gen_C50M_and_C33M(
-    .clkout(C100M),
-    .clkoutd(C50M),
-    .clkoutd3(C33M),
-    .reset(!RESET_n),
-    .clkin(C7M)
+
+Gowin_rPLL gen_C33M_C50M_and_C100M(
+    .clkout(C100M), //output clkout
+    .clkoutd(C50M), //output clkoutd
+    .clkoutd3(C33M), //output clkoutd3
+    .clkin(OSC_CLK_X1) //input clkin
 );
+
 
 //DIV with 3.5
 Gowin_CLKDIV_100M_to_28M gen_C28M(
     .clkout(C28M),
-    .hclkin(C100M),
+    .hclkin(OSC_CLK_X1),
     .resetn(RESET_n)
 );
 

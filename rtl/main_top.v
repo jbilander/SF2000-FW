@@ -5,7 +5,7 @@ module main_top(
     input RESET_n,
     input CFGIN_n,
     input [23:1] A,
-    input OSC_CLK,
+    input OSC_CLK_X1,
     input SW1,
     input JP2,
     input JP3,
@@ -193,7 +193,7 @@ end
 
 clock clkcontrol(
     .C7M(C7M),
-    .OSC_CLK(OSC_CLK),
+    .OSC_CLK_X1(OSC_CLK_X1),
     .RESET_n(RESET_n),
     .CPU_SPEED_SWITCH(cpu_speed_switch),
     .JP2(JP2),

@@ -86,6 +86,7 @@ Gowin_rPLL gen_C33M_C50M_and_C100M(
     .clkout(C100M), //output clkout
     .clkoutd(C50M), //output clkoutd
     .clkoutd3(C33M), //output clkoutd3
+    .reset(!RESET_n), //input reset
     .clkin(OSC_CLK_X1) //input clkin
 );
 

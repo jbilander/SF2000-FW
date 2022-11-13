@@ -28,13 +28,15 @@ wire C42M;
 wire C50M;
 wire C100M;
 
-assign CLKCPU = CPU_SPEED_SWITCH ? C7M : clk_turbo;
+//assign CLKCPU = CPU_SPEED_SWITCH ? C7M : clk_turbo;
+
+assign CLKCPU = C7M;
 
 always @(posedge C7M) begin
 
     case (clksel)
 
-      3'b000: clksel0 <= 4'b0001; //C7M
+      3'b000: clksel0 <= 4'b0001; //Internal Oscillator CLK
       3'b001: clksel0 <= 4'b0010; //C14M
       3'b010: clksel0 <= 4'b0100; //C21M
       3'b011: clksel0 <= 4'b1000; //C28M

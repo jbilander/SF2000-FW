@@ -32,6 +32,13 @@ module main_top(
     output WE_BANK1_ODD_n,
     output WE_BANK0_EVEN_n,
     output WE_BANK1_EVEN_n,
+    output ROM_B1,
+    output ROM_B2,
+    output ROM_WE_n,
+    output ROM_OE_n,
+    output IDE_IOR_n,
+    output IDE_IOW_n,
+    output [1:0] IDE_CS_n,
     output DTACK_CPU_n,
     inout BR_n,
     inout BG_n,
@@ -43,14 +50,16 @@ module main_top(
 /*
     input JP8,
     output SPI_CS_n,
-    output ROM_OE_n,
-    output ROM_WE_n,
-    output ROM_B1,
-    output ROM_B2,
-    output IDE_IOR_n,
-    output IDE_IOW_n,
-    output [1:0] IDE_CS_n
+
 */
+
+reg rom_pin3 = 1'b1;
+reg rom_pin2 = 1'b0;
+reg rom_pin31 = 1'b1;
+
+assign ROM_B1 = rom_pin3;
+assign ROM_B2 = rom_pin2;
+assign ROM_WE_n = rom_pin31;
 
 /*
 Jumper descriptions:
@@ -86,7 +95,7 @@ wire [7:0] base_ide;            // base address for the IDE_CARD in Z2-space. (A
 wire ram_configured_n;          // keeps track if RAM_CARD is autoconfigured ok.
 wire ram_access;                // keeps track if local SRAM is being accessed.
 wire ide_configured_n;          // keeps track if IDE_CARD is autoconfigured ok.
-//wire ide_access;                // keeps track if the IDE is being accessed.
+wire ide_access;                // keeps track if the IDE is being accessed.
 
 wire as_n = dma_n ? AS_CPU_n : AS_MB_n;
 wire m6800_dtack_n;
@@ -139,7 +148,7 @@ always @(posedge CLKCPU or posedge AS_CPU_n) begin
     if (AS_CPU_n) begin
         fast_dtack_n <= 1'b1;
     end else begin
-        fast_dtack_n <= ~ram_access;
+        fast_dtack_n <= (ram_access || ide_access) ? 1'b0 : 1'b1;
     end
 end
 
@@ -254,7 +263,6 @@ fastram ramcontrol(
     .RAM_ACCESS(ram_access)
 );
 
-/*
 ata idecontrol(
     .CLKCPU(CLKCPU),
     .RESET_n(RESET_n),
@@ -271,6 +279,5 @@ ata idecontrol(
     .IDE_CS_n(IDE_CS_n[1:0]),
     .IDE_ACCESS(ide_access)
 );
-*/
 
 endmodule

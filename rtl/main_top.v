@@ -13,6 +13,7 @@ module main_top(
     input JP5,
     input JP6,
     input JP7,
+    input JP8,
     input RW_n,
     input UDS_n,
     input LDS_n,
@@ -62,7 +63,6 @@ JP9: Rom override ON/OFF
 */
 
 reg cpu_speed_switch = 1'b1;
-reg rom_pin3 = 1'b0;
 reg rom_pin2 = 1'b0;
 reg rom_pin31 = 1'b1;
 
@@ -80,7 +80,7 @@ wire m6800_dtack_n;
 assign DTACK_CPU_n = DTACK_MB_n & m6800_dtack_n;
 assign AS_MB_n = AS_CPU_n;
 
-assign ROM_B1 = rom_pin3;
+assign ROM_B1 = JP8;
 assign ROM_B2 = rom_pin2;
 assign ROM_WE_n = rom_pin31;
 

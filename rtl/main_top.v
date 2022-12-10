@@ -13,6 +13,7 @@ module main_top(
     input JP5,
     input JP6,
     input JP7,
+    input JP8,
     input RW_n,
     input UDS_n,
     input LDS_n,
@@ -48,20 +49,6 @@ module main_top(
 );
 
 /*
-    input JP8,
-    output SPI_CS_n,
-
-*/
-
-reg rom_pin3 = 1'b1;
-reg rom_pin2 = 1'b0;
-reg rom_pin31 = 1'b1;
-
-assign ROM_B1 = rom_pin3;
-assign ROM_B2 = rom_pin2;
-assign ROM_WE_n = rom_pin31;
-
-/*
 Jumper descriptions:
      Closed/Open
 SW1: 7 Mhz / Turbo
@@ -74,6 +61,9 @@ JP7: Autoboot IDE OFF/ON
 JP8: Oktagon/Oktapus. IDE-driver
 JP9: Rom override ON/OFF
 */
+
+reg rom_pin2 = 1'b0;
+reg rom_pin31 = 1'b1;
 
 reg init = 1'b1;
 reg dma_n = 1'b1;
@@ -99,14 +89,18 @@ wire ide_access;                // keeps track if the IDE is being accessed.
 
 wire as_n = dma_n ? AS_CPU_n : AS_MB_n;
 wire m6800_dtack_n;
+wire mb_dtack_n = cpu_speed_switch ? DTACK_MB_n : dtack_mobo_n;
+
+assign DTACK_CPU_n = mb_dtack_n & m6800_dtack_n & fast_dtack_n;
 
 assign BR_n = bus_req_n ? 1'b0 : 1'bZ;
 assign BR_68SEC000_n = br2_n ? BR_n & BGACK_n : 1'bZ;
 assign BG_n = dma_n ? 1'bZ : 1'b0;
 assign AS_MB_n = dma_n ? as_mobo_n : 1'bZ;
 
-wire mb_dtack_n = cpu_speed_switch ? DTACK_MB_n : dtack_mobo_n;
-assign DTACK_CPU_n = mb_dtack_n & m6800_dtack_n & fast_dtack_n;
+assign ROM_B1 = JP8;
+assign ROM_B2 = rom_pin2;
+assign ROM_WE_n = rom_pin31;
 
 //Set the CPU speed switch after the PLL generated clocks have stabilized, we boot on 7 MHz...
 always @(negedge RESET_n or posedge AS_CPU_n) begin

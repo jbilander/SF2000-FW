@@ -96,7 +96,8 @@ assign DTACK_CPU_n = mb_dtack_n & m6800_dtack_n & fast_dtack_n;
 assign BR_n = bus_req_n ? 1'b0 : 1'bZ;
 assign BR_68SEC000_n = br2_n ? BR_n & BGACK_n : 1'bZ;
 assign BG_n = dma_n ? 1'bZ : 1'b0;
-assign AS_MB_n = dma_n ? as_mobo_n : 1'bZ;
+assign AS_MB_n = dma_n ? cpu_speed_switch ? AS_CPU_n : as_mobo_n : 1'bZ;
+
 
 assign ROM_B1 = JP8;
 assign ROM_B2 = rom_pin2;
@@ -128,7 +129,7 @@ always @(negedge RESET_n or posedge C7M or posedge AS_CPU_n) begin
 
         end else begin
 
-            as_mobo_n <= ram_access;
+            as_mobo_n <= AS_CPU_n;
             dtack_mobo_n <= DTACK_MB_n;
 
         end

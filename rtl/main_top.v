@@ -129,7 +129,7 @@ always @(negedge RESET_n or posedge C7M or posedge AS_CPU_n) begin
 
         end else begin
 
-            as_mobo_n <= AS_CPU_n;
+            as_mobo_n <= AS_CPU_n || ram_access || ide_access;
             dtack_mobo_n <= DTACK_MB_n;
 
         end

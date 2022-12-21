@@ -72,7 +72,6 @@ reg br2_n = 1'b1;
 
 reg cpu_speed_switch = 1'b1;
 reg dtack_mobo_n = 1'b1;
-reg fast_dtack_n = 1'b1;
 reg as_mobo_n = 1'b1;
 reg [23:0] counter;
 
@@ -88,10 +87,12 @@ wire ide_configured_n;          // keeps track if IDE_CARD is autoconfigured ok.
 wire ide_access;                // keeps track if the IDE is being accessed.
 
 wire as_n = dma_n ? AS_CPU_n : AS_MB_n;
-wire m6800_dtack_n;
 wire mb_dtack_n = cpu_speed_switch ? DTACK_MB_n : dtack_mobo_n;
+wire m6800_dtack_n;
+wire ide_dtack_n;
+wire ram_dtack_n;
 
-assign DTACK_CPU_n = mb_dtack_n & m6800_dtack_n & fast_dtack_n;
+assign DTACK_CPU_n = mb_dtack_n & m6800_dtack_n & ide_dtack_n & ram_dtack_n;
 
 assign BR_n = bus_req_n ? 1'b0 : 1'bZ;
 assign BR_68SEC000_n = br2_n ? BR_n & BGACK_n : 1'bZ;
@@ -135,16 +136,6 @@ always @(negedge RESET_n or posedge C7M or posedge AS_CPU_n) begin
         end
     end
 
-end
-
-//Handle fast dtack
-always @(posedge CLKCPU or posedge AS_CPU_n) begin
-    
-    if (AS_CPU_n) begin
-        fast_dtack_n <= 1'b1;
-    end else begin
-        fast_dtack_n <= (ram_access || ide_access) ? 1'b0 : 1'b1;
-    end
 end
 
 
@@ -240,11 +231,13 @@ autoconfig_zii autoconfig(
 );
 
 fastram ramcontrol(
+    .CLKCPU(CLKCPU),
     .A(A[23:21]),
     .JP6(JP6),
     .RW_n(RW_n),
     .UDS_n(UDS_n),
     .LDS_n(LDS_n),
+    .AS_CPU_n(AS_CPU_n),
     .AS_n(as_n),
     .DS_n(ds_n),
     .BASE_RAM(base_ram[7:5]),
@@ -255,7 +248,8 @@ fastram ramcontrol(
     .WE_BANK1_ODD_n(WE_BANK1_ODD_n),
     .WE_BANK0_EVEN_n(WE_BANK0_EVEN_n),
     .WE_BANK1_EVEN_n(WE_BANK1_EVEN_n),
-    .RAM_ACCESS(ram_access)
+    .RAM_ACCESS(ram_access),
+    .DTACK_n(ram_dtack_n)
 );
 
 ata idecontrol(
@@ -272,7 +266,8 @@ ata idecontrol(
     .IDE_IOR_n(IDE_IOR_n),
     .IDE_IOW_n(IDE_IOW_n),
     .IDE_CS_n(IDE_CS_n[1:0]),
-    .IDE_ACCESS(ide_access)
+    .IDE_ACCESS(ide_access),
+    .DTACK_n(ide_dtack_n)
 );
 
 endmodule

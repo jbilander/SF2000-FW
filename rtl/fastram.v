@@ -1,11 +1,13 @@
 `timescale 1ns / 1ps
 
 module fastram(
+    input CLKCPU,
     input [23:21] A,
     input JP6,
     input RW_n,
     input UDS_n,
     input LDS_n,
+    input AS_CPU_n,
     input AS_n,
     input DS_n,
     input [7:5] BASE_RAM,
@@ -16,7 +18,8 @@ module fastram(
     output WE_BANK1_ODD_n,
     output WE_BANK0_EVEN_n,
     output WE_BANK1_EVEN_n,
-    output RAM_ACCESS
+    output RAM_ACCESS,
+    output reg DTACK_n = 1'b1
 );
 
 
@@ -43,5 +46,14 @@ assign WE_BANK1_ODD_n = second_4MB_access && !RW_n && !LDS_n ? 1'b0 : 1'b1;
 
 assign WE_BANK0_EVEN_n = first_4MB_access && !RW_n && !UDS_n ? 1'b0 : 1'b1;
 assign WE_BANK1_EVEN_n = second_4MB_access && !RW_n && !UDS_n ? 1'b0 : 1'b1;
+
+always @(posedge CLKCPU or posedge AS_CPU_n) begin
+
+    if (AS_CPU_n) begin
+        DTACK_n <= 1'b1;
+    end else begin
+        DTACK_n <= !RAM_ACCESS;
+    end
+end
 
 endmodule

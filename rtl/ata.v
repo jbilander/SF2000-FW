@@ -14,7 +14,8 @@ module ata(
     output reg IDE_IOR_n = 1'b1,
     output reg IDE_IOW_n = 1'b1,
     output [1:0] IDE_CS_n,
-    output IDE_ACCESS
+    output IDE_ACCESS,
+    output reg DTACK_n = 1'b1
 );
 
 /*
@@ -45,6 +46,27 @@ IDE_A0	<= A[9];
 IDE_A1	<= A[10];
 IDE_A2	<= A[11];
 */
+
+
+reg [7:0] counter;
+localparam delay_cnt = 8'd6;
+
+//always @(posedge CLKCPU or posedge AS_CPU_n) begin
+always @(posedge CLKCPU) begin
+
+    if (AS_CPU_n) begin
+        DTACK_n <= 1'b1;
+    end else begin
+
+        if (counter == delay_cnt) begin
+            DTACK_n <= !IDE_ACCESS;
+            counter <= 'd0;
+        end else begin
+            DTACK_n <= 1'b1;
+            counter <= counter + 1'b1;
+        end
+    end
+end
 
 always @(negedge RESET_n or posedge CLKCPU) begin
 

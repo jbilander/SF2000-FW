@@ -48,23 +48,30 @@ IDE_A2	<= A[11];
 */
 
 
-reg [7:0] counter;
-localparam delay_cnt = 8'd6;
+reg [2:0] counter;
+localparam delay_cnt = 3'd1;
 
 //always @(posedge CLKCPU or posedge AS_CPU_n) begin
 always @(posedge CLKCPU) begin
 
     if (AS_CPU_n) begin
         DTACK_n <= 1'b1;
+        counter <= 'd0;
     end else begin
 
-        if (counter == delay_cnt) begin
-            DTACK_n <= !IDE_ACCESS;
-            counter <= 'd0;
+        if (IDE_ACCESS) begin
+            if (counter == delay_cnt) begin
+                DTACK_n <= !IDE_ACCESS;
+                counter <= 'd0;
+            end else begin
+                DTACK_n <= 1'b1;
+                counter <= counter + 1'b1;
+            end
         end else begin
             DTACK_n <= 1'b1;
-            counter <= counter + 1'b1;
+            counter <= 'd0;
         end
+
     end
 end
 

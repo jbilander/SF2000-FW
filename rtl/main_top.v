@@ -14,12 +14,14 @@ module main_top(
     input JP6,
     input JP7,
     input JP8,
+    input JP9,
     input RW_n,
     input UDS_n,
     input LDS_n,
     input AS_CPU_n,
     input VPA_n,
     input [2:0] FC,
+    input FLASH_BUSY_n,
     input DTACK_MB_n,
     input BGACK_n,
     input BG_68SEC000_n,
@@ -39,6 +41,10 @@ module main_top(
     output ROM_OE_n,
     output IDE_IOR_n,
     output IDE_IOW_n,
+    output FLASH_A19,
+    output FLASH_WE_n,
+    output FLASH_OE_n,
+    output FLASH_RESET_n,
     output [1:0] IDE_CS_n,
     output DTACK_CPU_n,
     inout BR_n,
@@ -85,15 +91,17 @@ wire ram_configured_n;          // keeps track if RAM_CARD is autoconfigured ok.
 wire ram_access;                // keeps track if local SRAM is being accessed.
 wire ide_configured_n;          // keeps track if IDE_CARD is autoconfigured ok.
 wire ide_access;                // keeps track if the IDE is being accessed.
+wire flash_access;               // keeps track if the Flash is being accessed.
 
-wire as_internal = AS_CPU_n || ram_access || ide_access;
+wire as_internal = AS_CPU_n || ram_access || ide_access || flash_access;
 wire as_n = dma_n ? AS_CPU_n : AS_MB_n;
 wire mb_dtack_n = cpu_speed_switch ? DTACK_MB_n : dtack_mobo_n;
 wire m6800_dtack_n;
 wire ide_dtack_n;
 wire ram_dtack_n;
+wire flash_dtack_n;
 
-assign DTACK_CPU_n = mb_dtack_n & m6800_dtack_n & ide_dtack_n & ram_dtack_n;
+assign DTACK_CPU_n = mb_dtack_n & m6800_dtack_n & ide_dtack_n & ram_dtack_n & flash_dtack_n;
 
 assign BR_n = bus_req_n ? 1'b0 : 1'bZ;
 assign BR_68SEC000_n = br2_n ? BR_n & BGACK_n : 1'bZ;
@@ -269,6 +277,22 @@ ata idecontrol(
     .IDE_CS_n(IDE_CS_n[1:0]),
     .IDE_ACCESS(ide_access),
     .DTACK_n(ide_dtack_n)
+);
+
+flash romoverlay(
+    .A(A[23:1]),
+    .AS_n(AS_CPU_n),
+    .CLKCPU(CLKCPU),
+    .DS_n(ds_n),
+    .FLASH_A19(FLASH_A19),
+    .flash_access(flash_access),
+    .FLASH_BUSY_n(FLASH_BUSY_n),
+    .flash_dtack_n(flash_dtack_n),
+    .FLASH_OE_n(FLASH_OE_n),
+    .FLASH_WE_n(FLASH_WE_n),
+    .enable_maprom(~JP9),
+    .RESET_n(RESET_n),
+    .RW_n(RW_n)
 );
 
 endmodule

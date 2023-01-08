@@ -72,7 +72,7 @@ reg br2_n = 1'b1;
 
 reg cpu_speed_switch = 1'b1;
 reg dtack_mobo_n = 1'b1;
-reg as_mobo_n = 1'b1;
+reg as_internal_fast = 1'b1;
 reg [23:0] counter;
 
 localparam cnt_max_value = 24'd10000000;
@@ -86,6 +86,7 @@ wire ram_access;                // keeps track if local SRAM is being accessed.
 wire ide_configured_n;          // keeps track if IDE_CARD is autoconfigured ok.
 wire ide_access;                // keeps track if the IDE is being accessed.
 
+wire as_internal = AS_CPU_n || ram_access || ide_access;
 wire as_n = dma_n ? AS_CPU_n : AS_MB_n;
 wire mb_dtack_n = cpu_speed_switch ? DTACK_MB_n : dtack_mobo_n;
 wire m6800_dtack_n;
@@ -97,7 +98,7 @@ assign DTACK_CPU_n = mb_dtack_n & m6800_dtack_n & ide_dtack_n & ram_dtack_n;
 assign BR_n = bus_req_n ? 1'b0 : 1'bZ;
 assign BR_68SEC000_n = br2_n ? BR_n & BGACK_n : 1'bZ;
 assign BG_n = dma_n ? 1'bZ : 1'b0;
-assign AS_MB_n = dma_n ? cpu_speed_switch ? AS_CPU_n : as_mobo_n : 1'bZ;
+assign AS_MB_n = dma_n ? cpu_speed_switch ? as_internal : as_internal_fast : 1'bZ;
 
 
 assign ROM_B1 = JP8;
@@ -118,20 +119,20 @@ always @(negedge RESET_n or posedge C7M or posedge AS_CPU_n) begin
 
     if (!RESET_n) begin
 
-        as_mobo_n <= 1'b1;
-        dtack_mobo_n <= 1'b1;
+        as_internal_fast <= 1'b1;
+        dtack_mobo_n     <= 1'b1;
 
     end else begin
 
         if (AS_CPU_n) begin
 
-            as_mobo_n <= 1'b1;
-            dtack_mobo_n <= 1'b1;
+            as_internal_fast <= 1'b1;
+            dtack_mobo_n     <= 1'b1;
 
         end else begin
 
-            as_mobo_n <= AS_CPU_n || ram_access || ide_access;
-            dtack_mobo_n <= DTACK_MB_n;
+            as_internal_fast <= as_internal;
+            dtack_mobo_n     <= DTACK_MB_n;
 
         end
     end

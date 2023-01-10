@@ -1,9 +1,10 @@
-int parseArgs(int, char* []);
-void cleanup();
 ULONG getFileSize(char *);
-void copyFileToFlash(char *, ULONG, ULONG);
-void copyRomToFlash(ULONG);
-void copyBufToFlash(ULONG *, ULONG, ULONG);
+void copyFileToFlash(char *, ULONG, ULONG, bool);
+void copyRomToFlash(ULONG, bool);
+void copyBufToFlash(ULONG *, ULONG, ULONG, bool);
 void erase_bank(ULONG);
 void erase_chip();
 void usage();
+bool verifyBank(ULONG *, ULONG, ULONG);
+bool verifyFile(char *, ULONG);
+APTR readFileToBuf(char *);

@@ -5,7 +5,8 @@ CFLAGS=-lamiga -mcrt=nix13 -mcpu=68000
 all:	$(PROJECT)
 
 OBJ = flash.o \
-      main.o
+	config.o \
+	main.o
 
 SRCS = $(OBJ:%.o=%.c)
 

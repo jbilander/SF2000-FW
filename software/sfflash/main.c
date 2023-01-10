@@ -9,21 +9,12 @@
 
 #include "flash.h"
 #include "main.h"
+#include "config.h"
 
 #define MANUF_ID 2092
 #define PROD_ID  6
 
-char *ks_filename;
 void *flashbase;
-
-bool op_copy_rom      = false;
-bool op_program_flash = false;
-bool op_erase_flash   = false;
-bool op_erase_bank    = false;
-bool op_identify      = false;
-bool op_verify        = true;
-
-ULONG program_bank = FLASH_BANK_1;
 
 struct Library *DosBase;
 struct ExecBase *SysBase;
@@ -38,61 +29,84 @@ int main(int argc, char *argv[])
 
   // TODO: Perhaps this should be found from autoconfig or something...
   flashbase = (void *)FLASHBASE;
-  
+
   if (DosBase == NULL) {
     return(rc);
   }
+
   printf("Spitfire 2000 FlashROM tool\n");
-  if (parseArgs(argc,argv)) {
+
+  struct Config *config;
+  if ((config = configure(argc,argv)) != NULL) {
     if ((ExpansionBase = (struct ExpansionBase *)OpenLibrary("expansion.library",0)) != NULL) {
+
       struct ConfigDev *cd = NULL;
+
       if (cd = (struct ConfigDev*)FindConfigDev(NULL,MANUF_ID,PROD_ID)) {
 
         UWORD manufacturerId, deviceId;
-        if (op_identify) {
-          flash_identify(&manufacturerId,&deviceId);
-          printf("Manufacturer: %04X, Device: %04X\n",manufacturerId, deviceId);
-        } 
-        
-        if (flash_identify(&manufacturerId,&deviceId)) {
 
-          if (op_erase_flash) {
+        bool check_device = flash_identify(&manufacturerId,&deviceId);
+
+        if (check_device == false && config->op != OP_IDENTIFY) {
+          printf("Error: Expected to see manufacturer id %04X but got %04X instead\n",FLASH_MANUF,manufacturerId);
+          printf("Check that ROM overlay is switched off and try again.\n");
+        }
+
+        switch (config->op) {
+
+          case OP_IDENTIFY:
+            printf("Manufacturer: %04X, Device: %04X\n",manufacturerId, deviceId);
+          break;
+
+          case OP_VERIFY:
+            if (config->source == SOURCE_ROM) {
+              rc = (verifyBank((ULONG *)0xF80000,config->programBank,ROM_512K)) ? 0 : 5;
+            } else {
+              rc = (verifyFile(config->ks_filename,config->programBank)) ? 0 : 5;
+            }
+            break;
+
+          case OP_ERASE_BANK:
+            erase_bank(config->programBank);
+            break;
+
+          case OP_ERASE_CHIP:
             erase_chip();
-          } else if (op_erase_bank) {
-            erase_bank(program_bank);
-          } else if (op_copy_rom) {
-            printf("Copying Kickstart ROM to bank %d\n",(program_bank == FLASH_BANK_0) ? 0 : 1);
-            copyRomToFlash(program_bank);
-          } else if (op_program_flash) {
-            ULONG romSize = 0;
-            printf("Flashing kick file %s\n",ks_filename);
-            if ((romSize = getFileSize(ks_filename)) != 0) {
-              if (romSize == ROM_256K || romSize == ROM_512K || romSize == ROM_1M) {
-                if (romSize == ROM_1M) {
-                  erase_chip();
-                } else {
-                  erase_bank(program_bank);
-                }
-                if (romSize == ROM_1M) {
-                  // Force Bank 0 for 1M rom as it will fill both banks.
-                  copyFileToFlash(ks_filename,FLASH_BANK_0,romSize);
-                } else {
-                  copyFileToFlash(ks_filename,program_bank,romSize);
-                }
+            break;
 
-              } else {
-                printf("Bad rom size, 256K/512K/1M ROM required.\n");
-                rc = 5;
+          case OP_PROGRAM:
+            if (config->source == SOURCE_ROM) {
+              erase_bank(config->programBank);
+              printf("Copying Kickstart ROM to bank %d\n",(config->programBank == FLASH_BANK_0) ? 0 : 1);
+              copyRomToFlash(config->programBank,config->skipVerify);
+            } else {
+              ULONG romSize = 0;
+              printf("Flashing kick file %s\n",config->ks_filename);
+              if ((romSize = getFileSize(config->ks_filename)) != 0) {
+                if (romSize == ROM_256K || romSize == ROM_512K || romSize == ROM_1M) {
+                  if (romSize == ROM_1M) {
+                    erase_chip();
+                  } else {
+                    erase_bank(config->programBank);
+                  }
+                  if (romSize == ROM_1M) {
+                    // Force Bank 0 for 1M rom as it will fill both banks.
+                    copyFileToFlash(config->ks_filename,FLASH_BANK_0,romSize,config->skipVerify);
+                  } else {
+                    copyFileToFlash(config->ks_filename,config->programBank,romSize,config->skipVerify);
+                  }
+                } else {
+                  printf("Bad file size, 256K/512K/1M ROM required.\n");
+                  rc = 5;
+                }
               }
             }
-          } else {
-            usage();
-          }
+            break;
 
-        } else {
-          printf("Error: Chip ID failed, expected Manufacturer ID %04X but got %04X\n",FLASH_MANUF,manufacturerId);
-          printf("Make sure ROM Override is disabled and try again\n");
-          rc = 5;
+            case OP_NONE:
+              usage();
+              break;
         }
 
       } else {
@@ -105,81 +119,61 @@ int main(int argc, char *argv[])
       rc = 5;
     }
 
+  } else {
+    usage();
   }
 
-  cleanup();
+  if (config)        FreeMem(config,sizeof(struct Config));
+  if (ExpansionBase) CloseLibrary((struct Library *)ExpansionBase);
+  if (DosBase)       CloseLibrary((struct Library *)DosBase);
+
   return (rc);
 }
 
+/**
+ * erase_bank
+ *
+ * @brief Erase a bank
+ * @param bank Address of the bank to erase
+*/
 void erase_bank(ULONG bank) {
+  bank &= ~((ULONG)BANK_SIZE-1);
   UBYTE sector = 0;
   int progress = 0;
-  printf("Erasing bank %d\n", (program_bank == FLASH_BANK_0) ? 0 : 1);
+
+  fprintf(stdout,"Erasing bank %d:     ", (bank == FLASH_BANK_0) ? 0 : 1);
+  fflush(stdout);
   for (ULONG i = bank; i<bank + ROM_512K; i+=SECTOR_SIZE) {
 
-    sector = i >> 12;
-    progress = ((sector%128)*100)/128;
+    sector = i / SECTOR_SIZE;
+    progress = ((sector%BANK_SECTORS)*100)/(BANK_SECTORS-1);
 
-    if ((progress % 5) == 0) {
-      fprintf(stdout,"\33[2K\rSector erase %d%%",progress);
-      fflush(stdout);
-    }
+    fprintf(stdout,"\b\b\b\b%3d%%",progress);
+    fflush(stdout);
 
     flash_erase_sector(sector);
   }
-  fprintf(stdout,"\33[2K\rSector erase 100%%\n");
+  printf("\n");
 }
 
+/**
+ * erase_chip
+ *
+ * @brief Completely erase the flash
+*/
 void erase_chip() {
   printf("Erasing chip...");
   flash_erase_chip();
   printf(" Done\n");
 }
 
-int parseArgs(int argc, char *argv[]) {
-  for (int i=1; i<argc; i++) {
-    if (argv[i][0] == '-') {
-      switch(argv[i][1]) {
-        case 'c':
-          op_copy_rom = true;
-          break;
-        case 'V':
-          op_verify = false;
-          break;
-        case 'E':
-          op_erase_flash = true;
-          break;
-        case 'e':
-          op_erase_bank = true;
-          break;
-        case 'F':
-        case 'f':
-          if (i+1 < argc) {
-            op_program_flash = true;
-            ks_filename = argv[i+1];
-            i++;
-          }
-          break;
-        case 'i':
-        case 'I':
-          op_identify = true;
-          break;
-        case '1':
-          program_bank = FLASH_BANK_1;
-          break;
-        case '0':
-          program_bank = FLASH_BANK_0;
-          break;
-      }
-    }
-  }
-  if (op_program_flash) {
-    op_erase_flash = false;
-    op_erase_bank  = false;
-  }
-  return 1;
-}
-
+/**
+ * getFileSize
+ *
+ * @brief return the size of a file in bytes
+ * @param filename file to check the size of
+ * @returns File size in bytes
+*/
 ULONG getFileSize(char *filename) {
   BPTR fileLock;
   ULONG fileSize = 0;
@@ -198,50 +192,97 @@ ULONG getFileSize(char *filename) {
   }
 
   if (fileLock) UnLock(fileLock);
-
   if (FIB) FreeMem(FIB,sizeof(struct FileInfoBlock));
 
   return (fileSize);
 }
 
-void copyFileToFlash(char *filename, ULONG destination, ULONG romSize) {
-  BPTR fh = Open(filename,MODE_OLDFILE);
+/**
+ * readFileToBuF
+ *
+ * @brief Read the rom file to a buffer
+ * @param filename Name of the file to open
+ * @return Pointer to a buffer
+*/
+APTR readFileToBuf(char *filename) {
+  ULONG romSize = getFileSize(filename);
+  if (romSize == 0) return NULL;
 
-  bool success = 0;
+  BPTR fh;
+  APTR buffer;
 
-  if (fh) {
- 
-    APTR buffer = AllocMem(romSize, 0);
- 
-    if (buffer) {
+  buffer = AllocMem(romSize,MEMF_ANY);
+  if (buffer) {
+    fh = Open(filename,MODE_OLDFILE);
+
+    if (fh) {
       Read(fh,buffer,romSize);
-      copyBufToFlash(buffer,destination,romSize);
-      FreeMem(buffer,romSize);
-
+      Close(fh);
     } else {
-      printf("Unable to allocate memory.\n");
+      printf("Error opening %s\n",filename);
+      return NULL;
     }
+
+  } else {
+    printf("Couldn't allocate memory.\n");
+    return NULL;
   }
-  if (fh) Close(fh);
+
+  return buffer;
+}
+
+/**
+ * copyFileToFlash
+ *
+ * @brief Copy the contents of the specified file to the flash
+ * @param filename A pointer to the source buffer
+ * @param destination Bank address to write to
+ * @param romSize Size in bytes of the source
+ * @param skipVerify Skip verification
+*/
+void copyFileToFlash(char *filename, ULONG destination, ULONG romSize, bool skipVerify) {
+  APTR buffer;
+
+  if ((buffer = readFileToBuf(filename)) != NULL) {
+    copyBufToFlash(buffer,destination,romSize,skipVerify);
+    FreeMem(buffer,romSize);
+  }
+
   return;
 }
 
-void copyRomToFlash(ULONG destination) {
+/**
+ * copyRomToFlash
+ *
+ * @brief Copy the physical Kickstart ROM to flash
+ * @param destination Bank address to write to
+ * @param skipVerify Skip verification
+*/
+void copyRomToFlash(ULONG destination, bool skipVerify) {
   ULONG *source = (void *)0xF80000;
-  copyBufToFlash(source,destination,ROM_512K);
+  copyBufToFlash(source,destination,ROM_512K,skipVerify);
 }
 
-void copyBufToFlash(ULONG *source, ULONG destination, ULONG romSize) {
+/**
+ * copyBufToFlash
+ *
+ * @brief Copy the contents of the buffer to the flash
+ * @param source A pointer to the source buffer
+ * @param destination Bank address to write to
+ * @param romSize Size in bytes of the source
+ * @param skipVerify Skip verification
+*/
+void copyBufToFlash(ULONG *source, ULONG destination, ULONG romSize, bool skipVerify) {
   int progress = 0;
   int lastProgress = 1;
 
-  printf("Writing flash...\n");
-
+  fprintf(stdout,"Writing:     ");
+  fflush(stdout);
   for (ULONG i=0; i<romSize; i+=2) {
-    progress = (i+1)*100/romSize;
+    progress = i*100/(romSize-2);
 
-    if ((progress % 5) == 0 && lastProgress != progress) {
-        fprintf(stdout,"\33[2K\rProgress: %3d%%",progress);
+    if (lastProgress != progress) {
+        fprintf(stdout,"\b\b\b\b%3d%%",progress);
         fflush(stdout);
         lastProgress = progress;
     }
@@ -253,52 +294,86 @@ void copyBufToFlash(ULONG *source, ULONG destination, ULONG romSize) {
     }
 
   }
-  fprintf(stdout,"\33[2k\rProgress: 100%%\n");
-
-  if (op_verify) {
-    printf("Verifying...\n");
-
-    UWORD flash_data  = 0;
-    UWORD source_data = 0;
-    ULONG flash_address = 0;
-
-    for (ULONG i=0; i<romSize; i+=2) {
-
-      progress = (i+1)*100/romSize;
-
-      if ((progress % 5) == 0 && lastProgress != progress) {
-          fprintf(stdout,"\33[2K\rProgress: %3d%%",progress);
-          fflush(stdout);
-          lastProgress = progress;
-      }
-
-      flash_address = (ULONG)flashbase + destination + i;        
-      flash_data    = *(UWORD *)(void *)flash_address;
-      source_data   = *(UWORD *)((void *)source+i);
-
-      if (flash_data != source_data) {
-        fprintf(stdout,"\nVerification failed at %06x - Expected %04X but read %04X\n",(int)flash_address,source_data,flash_data);
-      }
-
-    }
-
-    fprintf(stdout,"\33[2k\rProgress: 100%%\n");
+  printf("\n");
+  if (skipVerify == false) {
+    verifyBank(source,destination,romSize);
   }
 }
 
-void cleanup() {
-  if (ExpansionBase != 0) CloseLibrary((struct Library *)ExpansionBase);
-  if (DosBase != 0)       CloseLibrary((struct Library *)DosBase);
+/** verifyBank
+ *
+ * @brief compare the specified bank with a buffer
+ * @returns success
+ * @param source A pointer to the source buffer
+ * @param bank The bank address to compare
+*/
+bool verifyBank(ULONG *source, ULONG bank, ULONG romSize) {
+  ULONG progress = 0;
+  ULONG lastProgress = 1;
+  fprintf(stdout,"Verifying:     ");
+  fflush(stdout);
+  UWORD flash_data  = 0;
+  UWORD source_data = 0;
+  ULONG flash_address = 0;
+  for (ULONG i=0; i<romSize; i+=2) {
+
+    progress = i*100/(romSize-2);
+
+    if (lastProgress != progress) {
+        fprintf(stdout,"\b\b\b\b%3d%%",(int)progress);
+        fflush(stdout);
+        lastProgress = progress;
+    }
+
+    flash_address = (ULONG)flashbase + bank + i;
+    flash_data    = *(UWORD *)(void *)flash_address;
+    source_data   = *(UWORD *)((void *)source+i);
+
+    if (flash_data != source_data) {
+      printf("\nVerification failed at %06x - Expected %04X but read %04X\n",(int)flash_address,source_data,flash_data);
+      return false;
+    }
+
+    if (romSize == ROM_256K) {
+      flash_data = *(UWORD *)(void *)(flash_address + ROM_256K);
+      if (flash_data != source_data) {
+        printf("\nVerification failed at %06x - Expected %04X but read %04X\n",(int)flash_address,source_data,flash_data);
+        return false;
+      }
+    }
+
+  }
+  printf("\n");
+  return true;
 }
 
-void usage() {
-    printf("\nUsage: sfflash [-cfieEV] [-f <kickstart rom>] [-0|1] \n\n");
-    printf("       -c                  -  Copy ROM to Flash.\n");
-    printf("       -f <kickstart file> -  Write Kickstart to Flash.\n");
-    printf("       -i                  -  Print Flash device id.\n");
-    printf("       -e                  -  Erase bank.\n");
-    printf("       -E                  -  Erase chip.\n");
-    printf("       -V                  -  Skip verification.\n");
-    printf("       -0                  -  Select bank 0 - $E0 ROM.\n");
-    printf("       -1                  -  Select bank 1 - $F8 ROM (default, boot bank).\n");
+/**
+ * verifyFile
+ *
+ * @brief Compare the specified bank with a file
+ * @returns success
+ * @param filename Filename
+ * @param bank Bank address to compare
+*/
+bool verifyFile(char *filename, ULONG bank) {
+  ULONG romSize;
+  APTR buffer;
+
+  bool success = false;
+
+  if ((romSize = getFileSize(filename)) != 0) {
+    if (romSize == ROM_256K || romSize == ROM_512K || romSize == ROM_1M) {
+        if ((buffer = readFileToBuf(filename)) != NULL) {
+          if (romSize == ROM_1M) bank = FLASH_BANK_0;
+          success = verifyBank(buffer,bank,romSize);
+          FreeMem(buffer,romSize);
+      }
+    } else {
+      printf("Bad file size, 256K/512K/1M ROM required.\n");
+      return false;
+    }
+  } else {
+    return false;
+  }
+  return success;
 }

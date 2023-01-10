@@ -1,25 +1,25 @@
-#include <string.h>
-#include <stdio.h>
+#include <exec/types.h>
 #include <stdbool.h>
-#include <proto/dos.h>
-#include <dos/dos.h>
 
-#define FLASH_MANUF      0x00BF
-
-#define FLASH_BUSY  1<<15
-
-// TODO: Autoconfig device for flash config/status
-#define FLASH_CONTROL 0xEE0000
-
-#define SECTOR_SIZE (2048 << 1)
 
 #define ROM_256K 0x040000
 #define ROM_512K 0x080000
 #define ROM_1M   0x100000
 
-#define FLASHBASE    0xA00000
-#define FLASH_BANK_0 0x000000
-#define FLASH_BANK_1 0x080000
+
+// SST 39LF802
+#define FLASH_MANUF   0x00BF
+
+#define SECTOR_SIZE  (2048 << 1)
+#define BANK_SIZE    0x080000
+#define BANK_SECTORS (BANK_SIZE / SECTOR_SIZE)
+#define FLASH_SIZE   0x100000
+//
+
+#define FLASHBASE     0xA00000
+
+#define FLASH_BANK_0  0x000000
+#define FLASH_BANK_1  0x080000
 
 // Command addresses left-shifted because Flash A0 = CPU A1
 #define ADDR_CMD_STEP_1  (0x555 << 1)
@@ -34,7 +34,6 @@
 #define CMD_ID_ENTRY     0x9090
 #define CMD_CFI_ENTRY    0x9898
 #define CMD_CFI_ID_EXIT  0xF0F0
-//
 
 void flash_unlock_sdp();
 void flash_erase_chip();

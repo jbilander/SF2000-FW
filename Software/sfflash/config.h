@@ -40,3 +40,5 @@ struct Config {
 };
 
 struct Config* configure(int, char* []);
+
+void usage();

@@ -290,6 +290,7 @@ flash romoverlay(
     .flash_dtack_n(flash_dtack_n),
     .FLASH_OE_n(FLASH_OE_n),
     .FLASH_WE_n(FLASH_WE_n),
+    .FLASH_RESET_n(FLASH_RESET_n),
     .enable_maprom(~JP9),
     .RESET_n(RESET_n),
     .RW_n(RW_n)

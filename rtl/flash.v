@@ -1,4 +1,5 @@
 module flash (
+  input [23:1] A,
   input CLKCPU,
   input RESET_n,
   input AS_n,
@@ -6,11 +7,11 @@ module flash (
   input RW_n,
   input enable_maprom,
   output flash_access,
-  input [23:1] A,
-  input FLASH_BUSY_n,
+  output FLASH_BUSY_n,
   output flash_dtack_n,
   output reg FLASH_WE_n,
   output reg FLASH_OE_n,
+  output FLASH_RESET_n,
   output FLASH_A19
 );
 
@@ -19,6 +20,7 @@ reg maprom_enabled;
 reg [1:0] dtack = 0;
 
 assign FLASH_A19 = A[19] || OVL; // Force bank 1 for early boot overlay.
+assign FLASH_RESET_n = RESET_n;
 
 assign flash_access = A[23:20] == 4'hA     && !maprom_enabled        || // $A00000-AFFFFF
                       A[23:20] == 4'b0     &&  maprom_enabled && OVL || // $000000-0FFFFF - Early boot overlay

@@ -28,7 +28,24 @@ wire C42M;
 wire C50M;
 wire C100M;
 
-assign CLKCPU = CPU_SPEED_SWITCH ? C7M : clk_turbo;
+reg switch;
+assign CLKCPU = switch ? C7M : clk_turbo;
+
+always @(posedge C7M) begin
+    if (AS_CPU_n && DTACK_CPU_n) begin
+        switch <= CPU_SPEED_SWITCH;
+    end
+end
+
+// clk_mux not used, Experimental, comment out "assign CLKCPU" above and change to .CLKOUT(CLKCPU) below to fiddle with this
+clk_mux clkmuxer(
+    .CLK1(C7M),
+    .CLK2(clk_turbo),
+    .RESET_n(RESET_n),
+    .CPU_SPEED_SWITCH(CPU_SPEED_SWITCH),
+    .CLKOUT(CLKOUT)
+);
+
 
 always @(posedge C7M) begin
 
@@ -82,12 +99,23 @@ Gowin_rPLL_6x gen_C14M_C21M_and_C42M(
 );
 
 
+/*
 Gowin_rPLL gen_C33M_C50M_and_C100M(
     .clkout(C100M), //output clkout
     .clkoutd(C50M), //output clkoutd
     .clkoutd3(C33M), //output clkoutd3
     .reset(!RESET_n), //input reset
     .clkin(OSC_CLK_X1) //input clkin
+);
+*/
+
+
+Gowin_rPLL_14x gen_C33M_C50M_and_C100M(
+    .clkout(C100M), //output clkout
+    .clkoutd(C50M), //output clkoutd
+    .clkoutd3(C33M), //output clkoutd3
+    .reset(!RESET_n), //input reset
+    .clkin(C7M) //input clkin
 );
 
 

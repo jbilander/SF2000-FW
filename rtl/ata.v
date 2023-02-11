@@ -10,6 +10,10 @@ module ata(
     input AS_CPU_n,
     input [7:0] BASE_IDE,
     input IDE_CONFIGURED_n,
+    input JP2,
+    input JP3,
+    input JP4,
+    input CPU_SPEED_SWITCH,
     output reg ROM_OE_n = 1'b1,
     output reg IDE_IOR_n = 1'b1,
     output reg IDE_IOW_n = 1'b1,
@@ -47,11 +51,10 @@ IDE_A1	<= A[10];
 IDE_A2	<= A[11];
 */
 
-
 reg [2:0] counter;
-localparam delay_cnt = 3'd1;
+wire [2:0] clksel = {JP2, JP3, JP4};
+wire [2:0] delay_cnt = !CPU_SPEED_SWITCH && (clksel == 3'b101 || clksel == 3'b110) ? 3'd2 : 3'd0;
 
-//always @(posedge CLKCPU or posedge AS_CPU_n) begin
 always @(posedge CLKCPU) begin
 
     if (AS_CPU_n) begin

@@ -7,15 +7,17 @@
     <FileList>
         <File path="../rtl/ata.v" type="file.verilog" enable="1"/>
         <File path="../rtl/autoconfig_zii.v" type="file.verilog" enable="1"/>
+        <File path="../rtl/clk_mux.v" type="file.verilog" enable="1"/>
         <File path="../rtl/clock.v" type="file.verilog" enable="1"/>
         <File path="../rtl/fastram.v" type="file.verilog" enable="1"/>
+        <File path="../rtl/flash.v" type="file.verilog" enable="1"/>
         <File path="../rtl/gowin_clkdiv_100M_to_28M.v" type="file.verilog" enable="1"/>
         <File path="../rtl/gowin_dcs.v" type="file.verilog" enable="1"/>
-        <File path="../rtl/gowin_rpll.v" type="file.verilog" enable="1"/>
+        <File path="../rtl/gowin_rpll.v" type="file.verilog" enable="0"/>
+        <File path="../rtl/gowin_rpll_14x.v" type="file.verilog" enable="1"/>
         <File path="../rtl/gowin_rpll_6x.v" type="file.verilog" enable="1"/>
         <File path="../rtl/m6800.v" type="file.verilog" enable="1"/>
         <File path="../rtl/main_top.v" type="file.verilog" enable="1"/>
-        <File path="../rtl/flash.v" type="file.verilog" enable="1"/>
         <File path="../rtl/testbench.v" type="file.verilog" enable="0"/>
         <File path="../GW1N-UV9LQ144.cst" type="file.cst" enable="1"/>
     </FileList>

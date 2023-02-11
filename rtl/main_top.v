@@ -91,7 +91,7 @@ wire ram_configured_n;          // keeps track if RAM_CARD is autoconfigured ok.
 wire ram_access;                // keeps track if local SRAM is being accessed.
 wire ide_configured_n;          // keeps track if IDE_CARD is autoconfigured ok.
 wire ide_access;                // keeps track if the IDE is being accessed.
-wire flash_access;               // keeps track if the Flash is being accessed.
+wire flash_access;              // keeps track if the Flash is being accessed.
 
 wire as_internal = AS_CPU_n || ram_access || ide_access || flash_access;
 wire as_n = dma_n ? AS_CPU_n : AS_MB_n;
@@ -271,6 +271,10 @@ ata idecontrol(
     .AS_CPU_n(AS_CPU_n),
     .BASE_IDE(base_ide[7:0]),
     .IDE_CONFIGURED_n(ide_configured_n),
+    .JP2(JP2),
+    .JP3(JP3),
+    .JP4(JP4),
+    .CPU_SPEED_SWITCH(cpu_speed_switch),
     .ROM_OE_n(ROM_OE_n),
     .IDE_IOR_n(IDE_IOR_n),
     .IDE_IOW_n(IDE_IOW_n),

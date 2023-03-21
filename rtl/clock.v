@@ -98,18 +98,7 @@ Gowin_rPLL_6x gen_C14M_C21M_and_C42M(
     .clkin(C7M)
 );
 
-
-/*
-Gowin_rPLL gen_C33M_C50M_and_C100M(
-    .clkout(C100M), //output clkout
-    .clkoutd(C50M), //output clkoutd
-    .clkoutd3(C33M), //output clkoutd3
-    .reset(!RESET_n), //input reset
-    .clkin(OSC_CLK_X1) //input clkin
-);
-*/
-
-
+//PLL
 Gowin_rPLL_14x gen_C33M_C50M_and_C100M(
     .clkout(C100M), //output clkout
     .clkoutd(C50M), //output clkoutd
@@ -118,12 +107,12 @@ Gowin_rPLL_14x gen_C33M_C50M_and_C100M(
     .clkin(C7M) //input clkin
 );
 
-
 //DIV with 3.5
 Gowin_CLKDIV_100M_to_28M gen_C28M(
     .clkout(C28M),
-    .hclkin(OSC_CLK_X1),
+    .hclkin(C100M),
     .resetn(RESET_n)
 );
+
 
 endmodule

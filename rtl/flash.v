@@ -24,7 +24,7 @@ reg maprom_enabled;
 reg [2:0] counter;
 
 wire [2:0] clksel = {JP2, JP3, JP4};
-wire [2:0] delay_cnt = !CPU_SPEED_SWITCH && (clksel == 3'b101 || clksel == 3'b110) ? 3'd2 : 3'd0;
+wire [2:0] delay_cnt = !CPU_SPEED_SWITCH && (clksel == 3'b101 || clksel == 3'b110) ? (JP9 ? 3'd2 : 3'd3) : 3'd0;
 
 assign FLASH_A19 = A[19] || OVL; // Force bank 1 for early boot overlay.
 assign FLASH_RESET_n = RESET_n;
@@ -34,7 +34,7 @@ assign FLASH_ACCESS = A[23:20] == 4'hA     && !maprom_enabled               || /
                       A[23:19] == 5'b11111 &&  maprom_enabled               || // $F80000-FFFFFF
                       A[23:19] == 5'b11100 &&  maprom_enabled && !AS_CPU_n;    // $E00000-E7FFFF
 
-always @(posedge CLKCPU) begin
+always @(posedge CLKCPU or posedge AS_CPU_n) begin
 
     if (AS_CPU_n) begin
         DTACK_n <= 1'b1;

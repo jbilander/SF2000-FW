@@ -285,19 +285,23 @@ ata idecontrol(
 
 flash romoverlay(
     .A(A[23:1]),
-    .AS_n(AS_CPU_n),
+    .AS_CPU_n(AS_CPU_n),
     .CLKCPU(CLKCPU),
+    .RESET_n(RESET_n),
     .DS_n(ds_n),
-    .FLASH_A19(FLASH_A19),
-    .flash_access(flash_access),
+    .RW_n(RW_n),
+    .JP2(JP2),
+    .JP3(JP3),
+    .JP4(JP4),
+    .JP9(JP9),
+    .CPU_SPEED_SWITCH(cpu_speed_switch),
     .FLASH_BUSY_n(FLASH_BUSY_n),
-    .flash_dtack_n(flash_dtack_n),
+    .FLASH_A19(FLASH_A19),
+    .FLASH_ACCESS(flash_access),
+    .FLASH_RESET_n(FLASH_RESET_n),
     .FLASH_OE_n(FLASH_OE_n),
     .FLASH_WE_n(FLASH_WE_n),
-    .FLASH_RESET_n(FLASH_RESET_n),
-    .enable_maprom(~JP9),
-    .RESET_n(RESET_n),
-    .RW_n(RW_n)
+    .DTACK_n(flash_dtack_n)
 );
 
 endmodule

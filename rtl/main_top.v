@@ -79,9 +79,9 @@ reg br2_n = 1'b1;
 reg cpu_speed_switch = 1'b1;
 reg dtack_mobo_n = 1'b1;
 reg as_internal_fast = 1'b1;
-reg [23:0] counter;
+reg [31:0] counter;
 
-localparam cnt_max_value = 24'd10000000;
+localparam cnt_max_value = 32'd100000000;
 
 wire ds_n = LDS_n & UDS_n;      // Data Strobe
 wire [7:5] base_ram;            // base address for the RAM_CARD in Z2-space. (A23-A21)

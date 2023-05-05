@@ -32,7 +32,7 @@ assign FLASH_RESET_n = RESET_n;
 assign FLASH_ACCESS = A[23:20] == 4'hA     && !maprom_enabled               || // $A00000-AFFFFF
                       A[23:20] == 4'b0     &&  maprom_enabled && OVL        || // $000000-0FFFFF - Early boot overlay
                       A[23:19] == 5'b11111 &&  maprom_enabled               || // $F80000-FFFFFF
-                      A[23:19] == 5'b11100 &&  maprom_enabled && !AS_CPU_n;    // $E00000-E7FFFF
+                      A[23:19] == 5'b11100 &&  maprom_enabled;                 // $E00000-E7FFFF
 
 always @(posedge CLKCPU or posedge AS_CPU_n) begin
 

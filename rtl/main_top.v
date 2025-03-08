@@ -51,7 +51,15 @@ module main_top(
     inout BG_n,
     inout E,
     inout AS_MB_n,
-    inout [15:0] D
+    inout [15:0] D,
+
+    output INT2_n,
+
+    output SD_SS_n,
+    output SD_SCLK,
+    output SD_MOSI,
+    input SD_MISO,
+    input SD_CD_n
 );
 
 /*
@@ -92,16 +100,18 @@ wire ram_access;                // keeps track if local SRAM is being accessed.
 wire ide_configured_n;          // keeps track if IDE_CARD is autoconfigured ok.
 wire ide_access;                // keeps track if the IDE is being accessed.
 wire flash_access;              // keeps track if the Flash is being accessed.
+wire sdcard_access;
 
-wire as_internal = AS_CPU_n || ram_access || ide_access || flash_access;
+wire as_internal = AS_CPU_n || ram_access || ide_access || flash_access || sdcard_access;
 wire as_n = dma_n ? AS_CPU_n : AS_MB_n;
 wire mb_dtack_n = cpu_speed_switch ? DTACK_MB_n : dtack_mobo_n;
 wire m6800_dtack_n;
 wire ide_dtack_n;
 wire ram_dtack_n;
 wire flash_dtack_n;
+wire sdcard_dtack_n;
 
-assign DTACK_CPU_n = mb_dtack_n & m6800_dtack_n & ide_dtack_n & ram_dtack_n & flash_dtack_n;
+assign DTACK_CPU_n = mb_dtack_n & m6800_dtack_n & ide_dtack_n & ram_dtack_n & flash_dtack_n & sdcard_dtack_n;
 
 assign BR_n = bus_req_n ? 1'b0 : 1'bZ;
 assign BR_68SEC000_n = br2_n ? BR_n & BGACK_n : 1'bZ;
@@ -220,6 +230,10 @@ m6800 m6800_bus(
     .M6800_DTACK_n(m6800_dtack_n)
 );
 
+wire [15:0] ac_data_in = D;
+wire [15:0] ac_data_out;
+wire ac_data_oe;
+
 autoconfig_zii autoconfig(
     .C7M(C7M),
     .CFGIN_n(CFGIN_n),
@@ -231,7 +245,9 @@ autoconfig_zii autoconfig(
     .RW_n(RW_n),
     .A_HIGH(A[23:16]),
     .A_LOW(A[6:1]),
-    .D_HIGH_NYBBLE(D[15:12]),
+    .data_in(ac_data_in),
+    .data_out(ac_data_out),
+    .data_oe(ac_data_oe),
     .BASE_RAM(base_ram[7:5]),
     .BASE_IDE(base_ide[7:0]),
     .RAM_CONFIGURED_n(ram_configured_n),
@@ -303,5 +319,39 @@ flash romoverlay(
     .FLASH_WE_n(FLASH_WE_n),
     .DTACK_n(flash_dtack_n)
 );
+
+wire [15:0] sd_data_in = D;
+wire [15:0] sd_data_out;
+wire sd_data_oe;
+
+assign sdcard_access = !AS_CPU_n && A[23:16] == 8'hEE;
+
+sdcard sdcard_inst(
+    .C100M(OSC_CLK_X1),
+    .RESET_n(RESET_n),
+
+    .ADDR(A),
+    .access(sdcard_access),
+    .RW(RW_n),
+    .ds_n(ds_n),
+
+    .dtack_n(sdcard_dtack_n),
+
+    .data_in(sd_data_in),
+    .data_out(sd_data_out),
+    .data_oe(sd_data_oe),
+
+    .INT2_n(INT2_n),
+
+    .SS_n(SD_SS_n),
+    .SCLK(SD_SCLK),
+    .MOSI(SD_MOSI),
+    .MISO(SD_MISO),
+    .CD_n(SD_CD_n)
+);
+
+wire [15:0] data_out = ac_data_oe ? ac_data_out : sd_data_out;
+wire data_oe = ac_data_oe || sd_data_oe;
+assign D = data_oe ? data_out : 16'bz;
 
 endmodule

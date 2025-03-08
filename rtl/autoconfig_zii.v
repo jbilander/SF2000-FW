@@ -11,7 +11,9 @@ module autoconfig_zii(
     input RW_n,
     input [23:16] A_HIGH,
     input [6:1] A_LOW,
-    inout [15:12] D_HIGH_NYBBLE,
+    input [15:0] data_in,
+    output [15:0] data_out,
+    output data_oe,
     output reg [7:5] BASE_RAM,
     output reg [7:0] BASE_IDE,
     output RAM_CONFIGURED_n,
@@ -35,7 +37,7 @@ SysInfo reports it as a BSC Oktagon 2008 Z2 memory and a BSC Oktagon I/O device.
 scsi.device v109.3 or oktagon.device v6.10, selectable via jumper.
 */
 
-reg [3:0] data_out = 4'hF;
+reg [3:0] data_nyb_out = 4'hF;
 reg [1:0] config_out_n = 2'b11;
 reg [1:0] configured_n = 2'b11;
 reg [1:0] shutup_n = 2'b11;
@@ -45,7 +47,9 @@ wire autoconfig_access = !CFGIN_n && CFGOUT_n && (A_HIGH == 8'hE8) && !AS_CPU_n;
 assign RAM_CONFIGURED_n = configured_n[RAM_CARD];
 assign IDE_CONFIGURED_n = configured_n[IDE_CARD];
 assign CFGOUT_n = |config_out_n;
-assign D_HIGH_NYBBLE = autoconfig_access && RW_n && !DS_n ? data_out : 4'bZ;
+
+assign data_out = {data_nyb_out, 12'd0};
+assign data_oe = autoconfig_access && RW_n && !DS_n;
 
 always @(negedge RESET_n or posedge AS_CPU_n) begin
 
@@ -66,7 +70,6 @@ always @(negedge RESET_n or posedge C7M) begin
 
         configured_n <= 2'b11;
         shutup_n <= 2'b11;
-        data_out <= 4'bZ;
 
     end else begin
 
@@ -81,54 +84,54 @@ always @(negedge RESET_n or posedge C7M) begin
                 case (A_LOW)
 
                     6'h00: begin
-                        if (config_out_n == CONFIGURING_RAM) data_out <= 4'b1110;                 // (00) 1110 Link into memory free list
-                        if (config_out_n == CONFIGURING_IDE) data_out <= JP7 ? 4'b1101 : 4'b1100; // (00) 1101 Optional ROM vector valid
+                        if (config_out_n == CONFIGURING_RAM) data_nyb_out <= 4'b1110;                 // (00) 1110 Link into memory free list
+                        if (config_out_n == CONFIGURING_IDE) data_nyb_out <= JP7 ? 4'b1101 : 4'b1100; // (00) 1101 Optional ROM vector valid
                     end
                     6'h01: begin
-                        if (config_out_n == CONFIGURING_RAM) data_out <= JP6 ? 4'b0000 : 4'b0111; // (02) 8 or 4 MB RAM
-                        if (config_out_n == CONFIGURING_IDE) data_out <= 4'b0001;                 // (02) 64KB
+                        if (config_out_n == CONFIGURING_RAM) data_nyb_out <= JP6 ? 4'b0000 : 4'b0111; // (02) 8 or 4 MB RAM
+                        if (config_out_n == CONFIGURING_IDE) data_nyb_out <= 4'b0001;                 // (02) 64KB
                     end
                     6'h02: begin
-                        if (config_out_n == CONFIGURING_RAM) data_out <= ~RAM_PROD_ID[7:4];       // (04) Product number RAM
-                        if (config_out_n == CONFIGURING_IDE) data_out <= ~IDE_PROD_ID[7:4];       // (04) Product number IDE
+                        if (config_out_n == CONFIGURING_RAM) data_nyb_out <= ~RAM_PROD_ID[7:4];       // (04) Product number RAM
+                        if (config_out_n == CONFIGURING_IDE) data_nyb_out <= ~IDE_PROD_ID[7:4];       // (04) Product number IDE
                     end
                     6'h03: begin
-                        if (config_out_n == CONFIGURING_RAM) data_out <= ~RAM_PROD_ID[3:0];       // (06) Product number RAM
-                        if (config_out_n == CONFIGURING_IDE) data_out <= ~IDE_PROD_ID[3:0];       // (06) Product number IDE
+                        if (config_out_n == CONFIGURING_RAM) data_nyb_out <= ~RAM_PROD_ID[3:0];       // (06) Product number RAM
+                        if (config_out_n == CONFIGURING_IDE) data_nyb_out <= ~IDE_PROD_ID[3:0];       // (06) Product number IDE
                     end
 
-                    6'h04: data_out <= ~4'b1100;             // (08) 1100 Board can be shut up and has preference to be put in 8 Meg space.
-                    6'h05: data_out <= ~4'b0000;             // (0A) 0000 Reserved
+                    6'h04: data_nyb_out <= ~4'b1100;             // (08) 1100 Board can be shut up and has preference to be put in 8 Meg space.
+                    6'h05: data_nyb_out <= ~4'b0000;             // (0A) 0000 Reserved
 
-                    6'h08: data_out <= ~MFG_ID[15:12];       // (10) Manufacturer ID
-                    6'h09: data_out <= ~MFG_ID[11:8];        // (12) Manufacturer ID
-                    6'h0A: data_out <= ~MFG_ID[7:4];         // (14) Manufacturer ID
-                    6'h0B: data_out <= ~MFG_ID[3:0];         // (16) Manufacturer ID
+                    6'h08: data_nyb_out <= ~MFG_ID[15:12];       // (10) Manufacturer ID
+                    6'h09: data_nyb_out <= ~MFG_ID[11:8];        // (12) Manufacturer ID
+                    6'h0A: data_nyb_out <= ~MFG_ID[7:4];         // (14) Manufacturer ID
+                    6'h0B: data_nyb_out <= ~MFG_ID[3:0];         // (16) Manufacturer ID
 
                     /*
-                    6'h0C: data_out <= 4'hF;                 // (18) Serial number, byte 0 (msb)
-                    6'h0D: data_out <= 4'hF;                 // (1A) ----------"----------
-                    6'h0E: data_out <= 4'hF;                 // (1C) Serial number, byte 1
-                    6'h0F: data_out <= 4'hF;                 // (1E) ----------"----------
+                    6'h0C: data_nyb_out <= 4'hF;                 // (18) Serial number, byte 0 (msb)
+                    6'h0D: data_nyb_out <= 4'hF;                 // (1A) ----------"----------
+                    6'h0E: data_nyb_out <= 4'hF;                 // (1C) Serial number, byte 1
+                    6'h0F: data_nyb_out <= 4'hF;                 // (1E) ----------"----------
                     */
 
-                    6'h10: data_out <= ~SERIAL[15:12];       // (20) Serial number, byte 2
-                    6'h11: data_out <= ~SERIAL[11:8];        // (22) ----------"----------
-                    6'h12: data_out <= ~SERIAL[7:4];         // (24) Serial number, byte 3 (lsb)
-                    6'h13: data_out <= ~SERIAL[3:0];         // (26) ----------"----------
+                    6'h10: data_nyb_out <= ~SERIAL[15:12];       // (20) Serial number, byte 2
+                    6'h11: data_nyb_out <= ~SERIAL[11:8];        // (22) ----------"----------
+                    6'h12: data_nyb_out <= ~SERIAL[7:4];         // (24) Serial number, byte 3 (lsb)
+                    6'h13: data_nyb_out <= ~SERIAL[3:0];         // (26) ----------"----------
 					
                     /*
                     //Optional ROM vector, these two bytes are the offset from the board's base address
-                    6'h14: if (config_out_n == CONFIGURING_IDE) data_out <= ~4'b0000;   // (28) ROM vector high byte high nybble
-                    6'h15: if (config_out_n == CONFIGURING_IDE) data_out <= ~4'b0000;   // (2A) ROM vector high byte low nybble
-                    6'h16: if (config_out_n == CONFIGURING_IDE) data_out <= ~4'b0000;   // (2C) ROM vector low byte high nybble
+                    6'h14: if (config_out_n == CONFIGURING_IDE) data_nyb_out <= ~4'b0000;   // (28) ROM vector high byte high nybble
+                    6'h15: if (config_out_n == CONFIGURING_IDE) data_nyb_out <= ~4'b0000;   // (2A) ROM vector high byte low nybble
+                    6'h16: if (config_out_n == CONFIGURING_IDE) data_nyb_out <= ~4'b0000;   // (2C) ROM vector low byte high nybble
                     */
-                    6'h17: if (config_out_n == CONFIGURING_IDE) data_out <= ~4'b0001;   // (2E) Rom vector low byte low nybble
+                    6'h17: if (config_out_n == CONFIGURING_IDE) data_nyb_out <= ~4'b0001;   // (2E) Rom vector low byte low nybble
 
-                    6'h20: data_out <= 4'd0;                 // (40) Because this card does not generate INT's
-                    6'h21: data_out <= 4'd0;                 // (42) Because this card does not generate INT's
+                    6'h20: data_nyb_out <= 4'd0;                 // (40) Because this card does not generate INT's
+                    6'h21: data_nyb_out <= 4'd0;                 // (42) Because this card does not generate INT's
 
-                    default: data_out <= 4'hF;
+                    default: data_nyb_out <= 4'hF;
 
                 endcase
 
@@ -140,17 +143,17 @@ always @(negedge RESET_n or posedge C7M) begin
 
                     6'h24: begin    // Written Second (48)
                         if (config_out_n == CONFIGURING_RAM) begin
-                            BASE_RAM[7:5] <= D_HIGH_NYBBLE[15:13];          //A23,A22,A21 is sufficient as base. (2 MB chunks)
+                            BASE_RAM[7:5] <= data_in[15:13];          //A23,A22,A21 is sufficient as base. (2 MB chunks)
                             configured_n[RAM_CARD] <= 1'b0;
                         end
                         if (config_out_n == CONFIGURING_IDE) begin 
-                            BASE_IDE[7:4] <= D_HIGH_NYBBLE;
+                            BASE_IDE[7:4] <= data_in[15:12];
                             configured_n[IDE_CARD] <= 1'b0;
                         end
                     end
                     6'h25: begin    // Written first (4A)
-                        //if (config_out_n == CONFIGURING_RAM) BASE_RAM[3:0] <= D_HIGH_NYBBLE;
-                        if (config_out_n == CONFIGURING_IDE) BASE_IDE[3:0] <= D_HIGH_NYBBLE;
+                        //if (config_out_n == CONFIGURING_RAM) BASE_RAM[3:0] <= data_in[15:12];
+                        if (config_out_n == CONFIGURING_IDE) BASE_IDE[3:0] <= data_in[15:12];
                     end
                     6'h26: begin    // (4C) "Shut up" address, if KS decides to not configure a specific device
                         if (config_out_n == CONFIGURING_RAM) shutup_n[RAM_CARD] <= 1'b0;

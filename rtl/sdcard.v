@@ -16,7 +16,7 @@ module sdcard(
     output INT2_n,
 
     output SS_n,
-    output reg SCLK = 1'b0,
+    output SCLK,
     output MOSI,
     input MISO,
     input CD_n
@@ -26,7 +26,7 @@ module sdcard(
 localparam ADDR_CLKDIV = 0;
 localparam ADDR_SLAVE_SEL = 1;
 localparam ADDR_CARD_DET = 2;
-localparam ADDR_SHIFT_ACTIVE = 3;
+localparam ADDR_STATUS = 3;
 localparam ADDR_SHIFT_REG = 4;
 localparam ADDR_INTREQ = 5;
 localparam ADDR_INTENA = 6;
@@ -122,59 +122,61 @@ end
 
 // Max clk_div = 255 => min SCLK = 195 kHz
 reg [7:0] clk_div;
-reg [7:0] clk_counter;
+reg [1:0] mode;
+reg [12:0] new_rx_length;
+reg set_rx_length;
 
-reg [7:0] shift_in = 8'hFF;
-reg [7:0] shift_out = 8'hFF;
-reg [2:0] bit_count;
+wire shifter_wr_req = wr_strobe && ADDR[3:1] == ADDR_SHIFT_REG;
+wire shifter_rd_req = rd_strobe && ADDR[3:1] == ADDR_SHIFT_REG;
 
-assign MOSI = shift_out[7];
+wire [7:0] shifter_data_in = data_in[7:0];
+wire [7:0] shifter_data_out;
 
-localparam SHIFT_IDLE = 1'd0;
-localparam SHIFT_RUNNING = 1'd1;
-reg shift_state;
+wire in_full;
+wire out_full;
+wire shifter_busy;
 
-wire shift_active = shift_state != SHIFT_IDLE;
+shifter shifter_inst(
+    .clk(C100M),
+    .reset(reset_filtered),
+
+    .clk_div(clk_div),
+    .mode(mode),
+
+    .new_rx_length(new_rx_length),
+    .set_rx_length(set_rx_length),
+
+    .wr_req(shifter_wr_req),
+    .rd_req(shifter_rd_req),
+
+    .data_in(shifter_data_in),
+    .data_out(shifter_data_out),
+
+    .in_full(in_full),
+    .out_full(out_full),
+    .busy(shifter_busy),
+
+    .MISO(MISO),
+    .MOSI(MOSI),
+    .SCLK(SCLK)
+);
 
 always @(posedge C100M) begin
     if (reset_filtered) begin
-        SCLK <= 1'b0;
-        shift_in <= 8'hFF;
-        shift_out <= 8'hFF;
-        shift_state <= SHIFT_IDLE;
+        mode <= 2'd0;
+        set_rx_length <= 1'b0;
     end else begin
+        set_rx_length <= 1'b0;
+
         if (wr_strobe && ADDR[3:1] == ADDR_CLKDIV) begin
             clk_div <= data_in[7:0];
         end
 
-        case (shift_state)
-            SHIFT_IDLE: begin
-                if (wr_strobe && ADDR[3:1] == ADDR_SHIFT_REG) begin
-                    shift_out <= data_in[7:0];
-                    bit_count <= 3'd7;
-                    clk_counter <= clk_div;
-                    shift_state <= SHIFT_RUNNING;
-                end
-            end
-            SHIFT_RUNNING: begin
-                if (clk_counter == 8'd0) begin
-                    if (SCLK) begin
-                        shift_in <= {shift_in[6:0], MISO};
-                        shift_out <= {shift_out[6:0], 1'b1};
-
-                        if (bit_count == 3'd0) begin
-                            shift_state <= SHIFT_IDLE;
-                        end
-
-                        bit_count <= bit_count - 3'd1;
-                    end
-                    SCLK <= !SCLK;
-                    clk_counter <= clk_div;
-                end else begin
-                    clk_counter <= clk_counter - 8'd1;
-                end
-            end
-        endcase
+        if (wr_strobe && ADDR[3:1] == ADDR_CARD_DET) begin
+            mode <= data_in[15:14];
+            new_rx_length <= data_in[12:0];
+            set_rx_length <= 1'b1;
+        end
     end
 end
 
@@ -185,8 +187,8 @@ always @(posedge C100M) begin
             ADDR_CLKDIV: data_out <= {8'd0, clk_div};
             ADDR_SLAVE_SEL: data_out <= {15'd0, slave_select};
             ADDR_CARD_DET: data_out <= {15'd0, cd_stable};
-            ADDR_SHIFT_ACTIVE: data_out <= {15'd0, shift_active};
-            ADDR_SHIFT_REG: data_out <= {8'd0, shift_in};
+            ADDR_STATUS: data_out <= {13'd0, in_full, out_full, shifter_busy};
+            ADDR_SHIFT_REG: data_out <= {8'd0, shifter_data_out};
             ADDR_INTREQ: data_out <= int_req;
             ADDR_INTENA: data_out <= int_ena;
             ADDR_INTACT: data_out <= int_act;

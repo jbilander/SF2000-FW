@@ -333,7 +333,8 @@ sdcard sdcard_inst(
     .ADDR(A),
     .access(sdcard_access),
     .RW(RW_n),
-    .ds_n(ds_n),
+    .UDS_n(UDS_n),
+    .LDS_n(LDS_n),
 
     .dtack_n(sdcard_dtack_n),
 

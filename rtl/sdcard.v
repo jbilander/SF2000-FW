@@ -5,7 +5,8 @@ module sdcard(
     input [23:1] ADDR,
     input access,
     input RW,
-    input ds_n,
+    input UDS_n,
+    input LDS_n,
 
     output dtack_n,
 
@@ -33,6 +34,8 @@ localparam ADDR_INTENA = 6;
 localparam ADDR_INTACT = 7;
 
 // Decode CPU control signals
+wire ds_n = UDS_n && LDS_n;
+
 wire wr_access = access && !ds_n && !RW;
 wire rd_access = access && !ds_n && RW;
 
@@ -126,15 +129,78 @@ reg [1:0] mode;
 reg [12:0] new_rx_length;
 reg set_rx_length;
 
-wire shifter_wr_req = wr_strobe && ADDR[3:1] == ADDR_SHIFT_REG;
-wire shifter_rd_req = rd_strobe && ADDR[3:1] == ADDR_SHIFT_REG;
+reg [7:0] in1;
+reg [7:0] in0;
+reg [7:0] out1;
+reg [7:0] out0;
 
-wire [7:0] shifter_data_in = data_in[7:0];
+reg in1_full;
+reg in0_full;
+reg out1_full;
+reg out0_full;
+
+wire [7:0] shifter_data_in = in1;
 wire [7:0] shifter_data_out;
 
 wire in_full;
 wire out_full;
 wire shifter_busy;
+
+wire shifter_wr_req = !in_full && in1_full;
+wire shifter_rd_req = !out0_full && out_full;
+
+wire wr_byte = wr_strobe && ADDR[3:1] == ADDR_SHIFT_REG && !UDS_n && LDS_n;
+wire wr_word = wr_strobe && ADDR[3:1] == ADDR_SHIFT_REG && !UDS_n && !LDS_n;
+
+wire rd_byte = rd_strobe && ADDR[3:1] == ADDR_SHIFT_REG && !UDS_n && LDS_n;
+wire rd_word = rd_strobe && ADDR[3:1] == ADDR_SHIFT_REG && !UDS_n && !LDS_n;
+
+always @(posedge C100M) begin
+    if (reset_filtered) begin
+        in1_full <= 1'b0;
+        in0_full <= 1'b0;
+        out1_full <= 1'b0;
+        out0_full <= 1'b0;
+    end else begin
+        if (wr_byte) begin
+            if (in_full && in1_full) begin
+                in0 <= data_in[15:8];
+                in0_full <= 1'b1;
+            end else begin
+                in1 <= data_in[15:8];
+                in1_full <= 1'b1;
+            end
+        end else if (wr_word) begin
+            in1 <= data_in[15:8];
+            in0 <= data_in[7:0];
+            in1_full <= 1'b1;
+            in0_full <= 1'b1;
+        end else begin
+            if (!in_full && in1_full) begin
+                in1 <= in0;
+                in1_full <= in0_full;
+                in0_full <= 1'b0;
+            end
+        end
+
+        if (rd_byte) begin
+            out1 <= out0_full ? out0 : shifter_data_out;
+            out1_full <= out0_full || out_full;
+            out0_full <= 1'b0;
+        end else if (rd_word) begin
+            out1_full <= 1'b0;
+            out0_full <= 1'b0;
+        end else begin
+            if (!out1_full) begin
+                out1 <= shifter_data_out;
+                out1_full <= out_full;
+            end else if (!out0_full) begin
+                out0 <= shifter_data_out;
+                out0_full <= out_full;
+            end
+        end
+    end
+end
 
 shifter shifter_inst(
     .clk(C100M),
@@ -180,6 +246,8 @@ always @(posedge C100M) begin
     end
 end
 
+wire [15:0] status = {9'd0, in_full, in1_full, in0_full, out1_full, out0_full, out_full, shifter_busy};
+
 // Latch data for CPU reads
 always @(posedge C100M) begin
     if (rd_strobe) begin
@@ -187,8 +255,8 @@ always @(posedge C100M) begin
             ADDR_CLKDIV: data_out <= {8'd0, clk_div};
             ADDR_SLAVE_SEL: data_out <= {15'd0, slave_select};
             ADDR_CARD_DET: data_out <= {15'd0, cd_stable};
-            ADDR_STATUS: data_out <= {13'd0, in_full, out_full, shifter_busy};
-            ADDR_SHIFT_REG: data_out <= {8'd0, shifter_data_out};
+            ADDR_STATUS: data_out <= status;
+            ADDR_SHIFT_REG: data_out <= {out1, out0};
             ADDR_INTREQ: data_out <= int_req;
             ADDR_INTENA: data_out <= int_ena;
             ADDR_INTACT: data_out <= int_act;

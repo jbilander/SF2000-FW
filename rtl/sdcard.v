@@ -129,78 +129,122 @@ reg [1:0] mode;
 reg [12:0] new_rx_length;
 reg set_rx_length;
 
-reg [7:0] in1;
-reg [7:0] in0;
-reg [7:0] out1;
-reg [7:0] out0;
+// CPU TX/RX buffers
+wire [15:0] tx_cb_data;
+wire [7:0] tx_cb_q;
+wire tx_cb_wr_byte;
+wire tx_cb_wr_word;
+wire tx_cb_fifo_has_space;
+wire tx_cb_empty;
+wire tx_cb_full;
 
-reg in1_full;
-reg in0_full;
-reg out1_full;
-reg out0_full;
+wire [7:0] rx_cb_data;
+wire [15:0] rx_cb_q;
+wire rx_cb_fifo_has_data;
+wire rx_cb_rd_byte;
+wire rx_cb_rd_word;
+wire rx_cb_empty;
+wire rx_cb_full;
 
-wire [7:0] shifter_data_in = in1;
-wire [7:0] shifter_data_out;
+// FIFOs
+wire [7:0] tx_fifo_data;
+wire [7:0] tx_fifo_q;
+wire [4:0] tx_fifo_used;
+wire tx_fifo_full;
+wire tx_fifo_empty;
+wire tx_fifo_wr_req;
+wire tx_fifo_rd_req;
 
-wire in_full;
-wire out_full;
+wire [7:0] rx_fifo_data;
+wire [7:0] rx_fifo_q;
+wire [4:0] rx_fifo_used;
+wire rx_fifo_full;
+wire rx_fifo_empty;
+wire rx_fifo_wr_req;
+wire rx_fifo_rd_req;
+
+// Shifter
+wire [7:0] shifter_tx;
+wire [7:0] shifter_rx;
+wire shifter_tx_full;
+wire shifter_rx_full;
+wire shifter_tx_wr_req;
+wire shifter_rx_rd_req;
 wire shifter_busy;
 
-wire shifter_wr_req = !in_full && in1_full;
-wire shifter_rd_req = !out0_full && out_full;
+// Connect cpu -> tx_cb -> tx_fifo -> shifter_tx
+assign tx_cb_data = data_in;
 
-wire wr_byte = wr_strobe && ADDR[3:1] == ADDR_SHIFT_REG && !UDS_n && LDS_n;
-wire wr_word = wr_strobe && ADDR[3:1] == ADDR_SHIFT_REG && !UDS_n && !LDS_n;
+assign tx_cb_wr_byte = wr_strobe && ADDR[3:1] == ADDR_SHIFT_REG && !UDS_n && LDS_n;
+assign tx_cb_wr_word = wr_strobe && ADDR[3:1] == ADDR_SHIFT_REG && !UDS_n && !LDS_n;
 
-wire rd_byte = rd_strobe && ADDR[3:1] == ADDR_SHIFT_REG && !UDS_n && LDS_n;
-wire rd_word = rd_strobe && ADDR[3:1] == ADDR_SHIFT_REG && !UDS_n && !LDS_n;
+assign tx_fifo_data = tx_cb_q;
+assign tx_fifo_wr_req = !tx_fifo_full && !tx_cb_empty;
+assign tx_cb_fifo_has_space = !tx_fifo_full;
 
-always @(posedge C100M) begin
-    if (reset_filtered) begin
-        in1_full <= 1'b0;
-        in0_full <= 1'b0;
-        out1_full <= 1'b0;
-        out0_full <= 1'b0;
-    end else begin
-        if (wr_byte) begin
-            if (in_full && in1_full) begin
-                in0 <= data_in[15:8];
-                in0_full <= 1'b1;
-            end else begin
-                in1 <= data_in[15:8];
-                in1_full <= 1'b1;
-            end
-        end else if (wr_word) begin
-            in1 <= data_in[15:8];
-            in0 <= data_in[7:0];
-            in1_full <= 1'b1;
-            in0_full <= 1'b1;
-        end else begin
-            if (!in_full && in1_full) begin
-                in1 <= in0;
-                in1_full <= in0_full;
-                in0_full <= 1'b0;
-            end
-        end
+assign shifter_tx = tx_fifo_q;
+assign shifter_tx_wr_req = !shifter_tx_full && !tx_fifo_empty;
+assign tx_fifo_rd_req = !shifter_tx_full && !tx_fifo_empty;
 
-        if (rd_byte) begin
-            out1 <= out0_full ? out0 : shifter_data_out;
-            out1_full <= out0_full || out_full;
-            out0_full <= 1'b0;
-        end else if (rd_word) begin
-            out1_full <= 1'b0;
-            out0_full <= 1'b0;
-        end else begin
-            if (!out1_full) begin
-                out1 <= shifter_data_out;
-                out1_full <= out_full;
-            end else if (!out0_full) begin
-                out0 <= shifter_data_out;
-                out0_full <= out_full;
-            end
-        end
-    end
-end
+// Connect shifter_rx -> rx_fifo -> rx_cb -> cpu
+assign rx_fifo_data = shifter_rx;
+assign rx_fifo_wr_req = shifter_rx_full && !rx_fifo_full;
+assign shifter_rx_rd_req = shifter_rx_full && !rx_fifo_full;
+
+assign rx_cb_data = rx_fifo_q;
+assign rx_fifo_rd_req = !rx_cb_full && !rx_fifo_empty;
+assign rx_cb_fifo_has_data = !rx_fifo_empty;
+
+assign rx_cb_rd_byte = rd_strobe && ADDR[3:1] == ADDR_SHIFT_REG && !UDS_n && LDS_n;
+assign rx_cb_rd_word = rd_strobe && ADDR[3:1] == ADDR_SHIFT_REG && !UDS_n && !LDS_n;
+
+tx_cpu_buf tx_cb(
+    .clk(C100M),
+    .reset(reset_filtered),
+    .wr_byte(tx_cb_wr_byte),
+    .wr_word(tx_cb_wr_word),
+    .fifo_has_space(tx_cb_fifo_has_space),
+    .data(tx_cb_data),
+    .q(tx_cb_q),
+    .empty(tx_cb_empty),
+    .full(tx_cb_full)
+);
+
+rx_cpu_buf rx_cb(
+    .clk(C100M),
+    .reset(reset_filtered),
+    .fifo_has_data(rx_cb_fifo_has_data),
+    .rd_byte(rx_cb_rd_byte),
+    .rd_word(rx_cb_rd_word),
+    .data(rx_cb_data),
+    .q(rx_cb_q),
+    .empty(rx_cb_empty),
+    .full(rx_cb_full)
+);
+
+fifo tx_fifo(
+    .clk(C100M),
+    .sclr(reset_filtered),
+    .rdreq(tx_fifo_rd_req),
+    .wrreq(tx_fifo_wr_req),
+    .data(tx_fifo_data),
+    .q(tx_fifo_q),
+    .usedw(tx_fifo_used),
+    .empty(tx_fifo_empty),
+    .full(tx_fifo_full)
+);
+
+fifo rx_fifo(
+    .clk(C100M),
+    .sclr(reset_filtered),
+    .rdreq(rx_fifo_rd_req),
+    .wrreq(rx_fifo_wr_req),
+    .data(rx_fifo_data),
+    .q(rx_fifo_q),
+    .usedw(rx_fifo_used),
+    .empty(rx_fifo_empty),
+    .full(rx_fifo_full)
+);
 
 shifter shifter_inst(
     .clk(C100M),
@@ -212,14 +256,15 @@ shifter shifter_inst(
     .new_rx_length(new_rx_length),
     .set_rx_length(set_rx_length),
 
-    .wr_req(shifter_wr_req),
-    .rd_req(shifter_rd_req),
+    .wr_req(shifter_tx_wr_req),
+    .rd_req(shifter_rx_rd_req),
 
-    .data_in(shifter_data_in),
-    .data_out(shifter_data_out),
+    .data_in(shifter_tx),
+    .data_out(shifter_rx),
 
-    .in_full(in_full),
-    .out_full(out_full),
+    .in_full(shifter_tx_full),
+    .out_full(shifter_rx_full),
+
     .busy(shifter_busy),
 
     .MISO(MISO),
@@ -246,7 +291,19 @@ always @(posedge C100M) begin
     end
 end
 
-wire [15:0] status = {9'd0, in_full, in1_full, in0_full, out1_full, out0_full, out_full, shifter_busy};
+wire [5:0] tx_fifo_len = {tx_fifo_full, tx_fifo_used};
+wire [5:0] rx_fifo_len = {rx_fifo_full, rx_fifo_used};
+
+wire [5:0] tx_cb_len = tx_cb_empty ? 6'd0 : (tx_cb_full ? 6'd2 : 6'd1);
+wire [5:0] rx_cb_len = rx_cb_empty ? 6'd0 : (rx_cb_full ? 6'd2 : 6'd1);
+
+wire [5:0] tx_len = tx_fifo_len + tx_cb_len;
+wire [5:0] rx_len = rx_fifo_len + rx_cb_len;
+
+wire tx_atleast_half_empty = tx_len < 6'd16;
+wire rx_atleast_half_full = rx_len >= 6'd16;
+
+wire [15:0] status = {9'd0, shifter_busy, tx_atleast_half_empty, rx_atleast_half_full, tx_cb_full, tx_cb_empty, rx_cb_full, rx_cb_empty};
 
 // Latch data for CPU reads
 always @(posedge C100M) begin
@@ -256,7 +313,7 @@ always @(posedge C100M) begin
             ADDR_SLAVE_SEL: data_out <= {15'd0, slave_select};
             ADDR_CARD_DET: data_out <= {15'd0, cd_stable};
             ADDR_STATUS: data_out <= status;
-            ADDR_SHIFT_REG: data_out <= {out1, out0};
+            ADDR_SHIFT_REG: data_out <= rx_cb_q;
             ADDR_INTREQ: data_out <= int_req;
             ADDR_INTENA: data_out <= int_ena;
             ADDR_INTACT: data_out <= int_act;

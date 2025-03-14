@@ -28,7 +28,7 @@ localparam ADDR_CLKDIV = 0;
 localparam ADDR_SLAVE_SEL = 1;
 localparam ADDR_CARD_DET = 2;
 localparam ADDR_STATUS = 3;
-localparam ADDR_SHIFT_REG = 4;
+localparam ADDR_SHIFT_CTRL = 4;
 localparam ADDR_INTREQ = 5;
 localparam ADDR_INTENA = 6;
 localparam ADDR_INTACT = 7;
@@ -83,7 +83,7 @@ always @(posedge C100M) begin
         cd_debounce_counter <= cd_debounce_counter - 20'd1;
     end
 
-    if (wr_strobe && ADDR[3:1] == ADDR_INTREQ && data_in[0]) begin
+    if (wr_strobe && ADDR[4:1] == ADDR_INTREQ && data_in[0]) begin
         cd_changed <= 1'b0;
     end
 end
@@ -101,7 +101,7 @@ always @(posedge C100M) begin
     if (reset_filtered) begin
         int_ena <= 16'd0;
     end else begin
-        if (wr_strobe && ADDR[3:1] == ADDR_INTENA) begin
+        if (wr_strobe && ADDR[4:1] == ADDR_INTENA) begin
             int_ena = data_in;
         end
     end
@@ -115,7 +115,7 @@ always @(posedge C100M) begin
     if (reset_filtered) begin
         slave_select <= 1'b0;
     end else begin
-        if (wr_strobe && ADDR[3:1] == ADDR_SLAVE_SEL) begin
+        if (wr_strobe && ADDR[4:1] == ADDR_SLAVE_SEL) begin
             slave_select = data_in[0];
         end
     end
@@ -175,8 +175,8 @@ wire shifter_busy;
 // Connect cpu -> tx_cb -> tx_fifo -> shifter_tx
 assign tx_cb_data = data_in;
 
-assign tx_cb_wr_byte = wr_strobe && ADDR[3:1] == ADDR_SHIFT_REG && !UDS_n && LDS_n;
-assign tx_cb_wr_word = wr_strobe && ADDR[3:1] == ADDR_SHIFT_REG && !UDS_n && !LDS_n;
+assign tx_cb_wr_byte = wr_strobe && ADDR[4] && !UDS_n && LDS_n;
+assign tx_cb_wr_word = wr_strobe && ADDR[4] && !UDS_n && !LDS_n;
 
 assign tx_fifo_data = tx_cb_q;
 assign tx_fifo_wr_req = !tx_fifo_full && !tx_cb_empty;
@@ -195,8 +195,8 @@ assign rx_cb_data = rx_fifo_q;
 assign rx_fifo_rd_req = !rx_cb_full && !rx_fifo_empty;
 assign rx_cb_fifo_has_data = !rx_fifo_empty;
 
-assign rx_cb_rd_byte = rd_strobe && ADDR[3:1] == ADDR_SHIFT_REG && !UDS_n && LDS_n;
-assign rx_cb_rd_word = rd_strobe && ADDR[3:1] == ADDR_SHIFT_REG && !UDS_n && !LDS_n;
+assign rx_cb_rd_byte = rd_strobe && ADDR[4] && !UDS_n && LDS_n;
+assign rx_cb_rd_word = rd_strobe && ADDR[4] && !UDS_n && !LDS_n;
 
 tx_cpu_buf tx_cb(
     .clk(C100M),
@@ -279,11 +279,11 @@ always @(posedge C100M) begin
     end else begin
         set_rx_length <= 1'b0;
 
-        if (wr_strobe && ADDR[3:1] == ADDR_CLKDIV) begin
+        if (wr_strobe && ADDR[4:1] == ADDR_CLKDIV) begin
             clk_div <= data_in[7:0];
         end
 
-        if (wr_strobe && ADDR[3:1] == ADDR_CARD_DET) begin
+        if (wr_strobe && ADDR[4:1] == ADDR_SHIFT_CTRL) begin
             mode <= data_in[15:14];
             new_rx_length <= data_in[12:0];
             set_rx_length <= 1'b1;
@@ -308,15 +308,16 @@ wire [15:0] status = {9'd0, shifter_busy, tx_atleast_half_empty, rx_atleast_half
 // Latch data for CPU reads
 always @(posedge C100M) begin
     if (rd_strobe) begin
-        case (ADDR[3:1])
+        case (ADDR[4:1])
             ADDR_CLKDIV: data_out <= {8'd0, clk_div};
             ADDR_SLAVE_SEL: data_out <= {15'd0, slave_select};
             ADDR_CARD_DET: data_out <= {15'd0, cd_stable};
             ADDR_STATUS: data_out <= status;
-            ADDR_SHIFT_REG: data_out <= rx_cb_q;
+            ADDR_SHIFT_CTRL: data_out <= 16'd0;
             ADDR_INTREQ: data_out <= int_req;
             ADDR_INTENA: data_out <= int_ena;
             ADDR_INTACT: data_out <= int_act;
+            default: data_out <= rx_cb_q;
         endcase
     end
 end

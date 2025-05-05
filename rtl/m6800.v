@@ -1,11 +1,11 @@
 `timescale 1ns / 1ps
 
 module m6800(
-    input C7M,
-    input RESET_n,
-    input VPA_n,
-    input CPUSPACE,
-    input AS_CPU_n,
+    input wire C7M,
+    input wire RESET_n,
+    input wire VPA_n,
+    input wire CPUSPACE,
+    input wire AS_CPU_n,
     output reg E_OUT,
     output reg VMA_n = 1'b1,
     output reg M6800_DTACK_n = 1'b1

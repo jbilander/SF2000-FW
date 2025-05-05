@@ -1,14 +1,14 @@
 `timescale 1ns / 1ps
 
 module clock(
-    input JP1,
-    input C14M,
-    input C80M,
-    input C100M,
+    input wire JP1,
+    input wire C14M,
+    input wire C80M,
+    input wire C100M,
     output reg C7M,
     output reg C40M,
     output reg C50M,
-    output CLKCPU
+    output wire CLKCPU
 );
 
 assign CLKCPU = JP1 ? C7M : C40M;

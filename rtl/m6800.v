@@ -17,8 +17,6 @@ reg e = 1'b1;               //used for syncing e_cnt (JP2 open)
 reg [3:0] e_cnt;            //counter for incoming E (JP2 open)
 reg [3:0] e_counter = 'd5;  //counter for generating E (JP2 closed)
 
-//assign E_OE = !JP2;
-
 always @(negedge C7M) begin
 
     if (e_counter == 'd5) begin

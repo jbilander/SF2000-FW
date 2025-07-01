@@ -6,6 +6,12 @@ module main_top(
     input wire JP2,
     input wire C7M_n,
     input wire RESET_n,
+    input wire CFGIN_n,
+    input wire [23:1] A,
+    input wire JP4,
+    input wire RW_n,
+    input wire UDS_n,
+    input wire LDS_n,
     input wire AS_CPU_n,
     input wire VPA_n,
     input wire [2:0] FC,
@@ -16,6 +22,10 @@ module main_top(
     input wire BGACK_n,
     input wire BG_68SEC000_n,
     input wire E_IN,
+    input wire [15:12] D_IN,
+    output wire [15:12] D_OUT,
+    output wire [15:12] D_OE,
+    output wire CFGOUT_n,
     output wire E_OUT,
     output wire CLKCPU,
     output wire VMA_n,
@@ -51,25 +61,18 @@ reg enable_dma;
 
 wire C7M = ~C7M_n;
 wire m6800_dtack_n;
-//wire ds_n = LDS_n & UDS_n;  // Data Strobe
-//wire [7:5] base_ram;        // base address for the RAM_CARD in Z2-space. (A23-A21)
-//wire [7:0] base_sdio;       // base address for the SDIO_CARD in Z2-space. (A23-A16)
+wire ds_n = LDS_n & UDS_n;  // Data Strobe
+wire [7:5] base_ram;        // base address for the RAM_CARD in Z2-space. (A23-A21)
+wire [7:0] base_sdio;       // base address for the SDIO_CARD in Z2-space. (A23-A16)
 
-//wire ram_configured_n;      // keeps track if RAM_CARD is autoconfigured ok.
-//wire ram_access;            // keeps track if local SRAM is being accessed.
-//wire sdio_configured_n;     // keeps track if SDIO_CARD is autoconfigured ok.
+wire ram_configured_n;      // keeps track if RAM_CARD is autoconfigured ok.
+wire ram_access;            // keeps track if local SRAM is being accessed.
+wire sdio_configured_n;     // keeps track if SDIO_CARD is autoconfigured ok.
 //wire sdio_access;           // keeps track if the SDIO is being accessed.
 
 assign CLKCPU = C7M;
 assign DTACK_CPU_n = DTACK_MB_n & m6800_dtack_n;
 assign AS_MB_n = AS_CPU_n;
-
-assign OE_BANK0_n = 1'b1;
-assign OE_BANK1_n = 1'b1;
-assign WE_BANK0_ODD_n = 1'b1;
-assign WE_BANK1_ODD_n = 1'b1;
-assign WE_BANK0_EVEN_n = 1'b1;
-assign WE_BANK1_EVEN_n = 1'b1;
 
 //Bootstrapping and bus arbitration
 always @ (negedge RESET_n or posedge C7M) begin
@@ -151,8 +154,6 @@ m6800 m6800_bus(
     .M6800_DTACK_n(m6800_dtack_n)
 );
 
-
-/*
 autoconfig_zii autoconfig(
     .C7M(C7M),
     .CFGIN_n(CFGIN_n),
@@ -191,6 +192,5 @@ fastram ramcontrol(
     .WE_BANK1_EVEN_n(WE_BANK1_EVEN_n),
     .RAM_ACCESS(ram_access)
 );
-*/
 
 endmodule

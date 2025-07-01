@@ -11,7 +11,7 @@ module autoconfig_zii(
     input wire [23:16] A_HIGH,
     input wire [6:1] A_LOW,
     input wire [15:12] D_IN,
-    output wire [15:12] D_OUT,
+    output reg [15:12] D_OUT,
     output wire [15:12] D_OE,
     output reg [7:5] BASE_RAM,
     output reg [7:0] BASE_SDIO,
@@ -33,32 +33,17 @@ localparam [15:0] SERIAL        = 16'd0;
 
 // SysInfo reports it as a BSC Oktagon 2008 Z2 memory and a BSC Oktagon I/O device.
 
-reg [3:0] data_out = 4'hF;
-reg [1:0] config_out_n = 2'b11;
 reg [1:0] configured_n = 2'b11;
 reg [1:0] shutup_n = 2'b11;
 
 wire autoconfig_access = !CFGIN_n && CFGOUT_n && (A_HIGH == 8'hE8) && !AS_CPU_n;
+wire [1:0] config_out_n = configured_n & shutup_n;
 
 assign RAM_CONFIGURED_n = configured_n[RAM_CARD];
 assign SDIO_CONFIGURED_n = configured_n[SDIO_CARD];
+
 assign CFGOUT_n = |config_out_n;
-// assign D_HIGH_NYBBLE = autoconfig_access && RW_n && !DS_n ? data_out : 4'bZ;
-assign D_OUT = autoconfig_access && RW_n && !DS_n ? data_out : 4'hF;
 assign D_OE  = autoconfig_access && RW_n && !DS_n ? 4'hF : 4'h0;
-
-always @(negedge RESET_n or posedge AS_CPU_n) begin
-
-    if (!RESET_n) begin
-
-        config_out_n <= 2'b11;
-
-    end else begin
-
-        config_out_n <= configured_n & shutup_n;
-
-    end
-end
 
 always @(negedge RESET_n or posedge C7M) begin
 
@@ -66,7 +51,6 @@ always @(negedge RESET_n or posedge C7M) begin
 
         configured_n <= 2'b11;
         shutup_n <= 2'b11;
-        data_out <= 4'bZ;
 
     end else begin
 
@@ -81,54 +65,54 @@ always @(negedge RESET_n or posedge C7M) begin
                 case (A_LOW)
 
                     6'h00: begin
-                        if (config_out_n == CONFIGURING_RAM)  data_out <= 4'b1110;                  // (00) 1110 Link into memory free list
-                        if (config_out_n == CONFIGURING_SDIO) data_out <= 4'b1101;                  // (00) 1101 Optional ROM vector valid
+                        if (config_out_n == CONFIGURING_RAM)  D_OUT <= 4'b1110;                 // (00) 1110 Link into memory free list
+                        if (config_out_n == CONFIGURING_SDIO) D_OUT <= 4'b1101;                 // (00) 1101 Optional ROM vector valid
                     end
                     6'h01: begin
-                        if (config_out_n == CONFIGURING_RAM)  data_out <= JP4 ? 4'b0000 : 4'b0111;  // (02) 8 or 4 MB RAM
-                        if (config_out_n == CONFIGURING_SDIO) data_out <= 4'b0001;                  // (02) 64KB
+                        if (config_out_n == CONFIGURING_RAM)  D_OUT <= JP4 ? 4'b0000 : 4'b0111; // (02) 8 or 4 MB RAM
+                        if (config_out_n == CONFIGURING_SDIO) D_OUT <= 4'b0001;                 // (02) 64KB
                     end
                     6'h02: begin
-                        if (config_out_n == CONFIGURING_RAM)  data_out <= ~RAM_PROD_ID[7:4];        // (04) Product number RAM
-                        if (config_out_n == CONFIGURING_SDIO) data_out <= ~SDIO_PROD_ID[7:4];       // (04) Product number SDIO
+                        if (config_out_n == CONFIGURING_RAM)  D_OUT <= ~RAM_PROD_ID[7:4];       // (04) Product number RAM
+                        if (config_out_n == CONFIGURING_SDIO) D_OUT <= ~SDIO_PROD_ID[7:4];      // (04) Product number SDIO
                     end
                     6'h03: begin
-                        if (config_out_n == CONFIGURING_RAM)  data_out <= ~RAM_PROD_ID[3:0];        // (06) Product number RAM
-                        if (config_out_n == CONFIGURING_SDIO) data_out <= ~SDIO_PROD_ID[3:0];       // (06) Product number IDE
+                        if (config_out_n == CONFIGURING_RAM)  D_OUT <= ~RAM_PROD_ID[3:0];       // (06) Product number RAM
+                        if (config_out_n == CONFIGURING_SDIO) D_OUT <= ~SDIO_PROD_ID[3:0];      // (06) Product number SDIO
                     end
 
-                    6'h04: data_out <= ~4'b1100;            // (08) 1100 Board can be shut up and has preference to be put in 8 Meg space.
-                    6'h05: data_out <= ~4'b0000;            // (0A) 0000 Reserved
+                    6'h04: D_OUT <= ~4'b1100;            // (08) 1100 Board can be shut up and has preference to be put in 8 Meg space.
+                    6'h05: D_OUT <= ~4'b0000;            // (0A) 0000 Reserved
 
-                    6'h08: data_out <= ~MFG_ID[15:12];      // (10) Manufacturer ID
-                    6'h09: data_out <= ~MFG_ID[11:8];       // (12) Manufacturer ID
-                    6'h0A: data_out <= ~MFG_ID[7:4];        // (14) Manufacturer ID
-                    6'h0B: data_out <= ~MFG_ID[3:0];        // (16) Manufacturer ID
+                    6'h08: D_OUT <= ~MFG_ID[15:12];      // (10) Manufacturer ID
+                    6'h09: D_OUT <= ~MFG_ID[11:8];       // (12) Manufacturer ID
+                    6'h0A: D_OUT <= ~MFG_ID[7:4];        // (14) Manufacturer ID
+                    6'h0B: D_OUT <= ~MFG_ID[3:0];        // (16) Manufacturer ID
 
                     /*
-                    6'h0C: data_out <= 4'hF;                // (18) Serial number, byte 0 (msb)
-                    6'h0D: data_out <= 4'hF;                // (1A) ----------"----------
-                    6'h0E: data_out <= 4'hF;                // (1C) Serial number, byte 1
-                    6'h0F: data_out <= 4'hF;                // (1E) ----------"----------
+                    6'h0C: D_OUT <= 4'hF;                // (18) Serial number, byte 0 (msb)
+                    6'h0D: D_OUT <= 4'hF;                // (1A) ----------"----------
+                    6'h0E: D_OUT <= 4'hF;                // (1C) Serial number, byte 1
+                    6'h0F: D_OUT <= 4'hF;                // (1E) ----------"----------
                     */
 
-                    6'h10: data_out <= ~SERIAL[15:12];      // (20) Serial number, byte 2
-                    6'h11: data_out <= ~SERIAL[11:8];       // (22) ----------"----------
-                    6'h12: data_out <= ~SERIAL[7:4];        // (24) Serial number, byte 3 (lsb)
-                    6'h13: data_out <= ~SERIAL[3:0];        // (26) ----------"----------
+                    6'h10: D_OUT <= ~SERIAL[15:12];      // (20) Serial number, byte 2
+                    6'h11: D_OUT <= ~SERIAL[11:8];       // (22) ----------"----------
+                    6'h12: D_OUT <= ~SERIAL[7:4];        // (24) Serial number, byte 3 (lsb)
+                    6'h13: D_OUT <= ~SERIAL[3:0];        // (26) ----------"----------
 					
                     /*
                     //Optional ROM vector, these two bytes are the offset from the board's base address
-                    6'h14: if (config_out_n == CONFIGURING_IDE) data_out <= ~4'b0000;   // (28) ROM vector high byte high nybble
-                    6'h15: if (config_out_n == CONFIGURING_IDE) data_out <= ~4'b0000;   // (2A) ROM vector high byte low nybble
-                    6'h16: if (config_out_n == CONFIGURING_IDE) data_out <= ~4'b0000;   // (2C) ROM vector low byte high nybble
+                    6'h14: if (config_out_n == CONFIGURING_SDIO) D_OUT <= ~4'b0000;   // (28) ROM vector high byte high nybble
+                    6'h15: if (config_out_n == CONFIGURING_SDIO) D_OUT <= ~4'b0000;   // (2A) ROM vector high byte low nybble
+                    6'h16: if (config_out_n == CONFIGURING_SDIO) D_OUT <= ~4'b0000;   // (2C) ROM vector low byte high nybble
                     */
-                    6'h17: if (config_out_n == CONFIGURING_SDIO) data_out <= ~4'b0001;  // (2E) Rom vector low byte low nybble
+                    6'h17: if (config_out_n == CONFIGURING_SDIO) D_OUT <= ~4'b0001;  // (2E) Rom vector low byte low nybble
 
-                    6'h20: data_out <= 4'd0;                // (40) Because this card does not generate INT's
-                    6'h21: data_out <= 4'd0;                // (42) Because this card does not generate INT's
+                    6'h20: D_OUT <= 4'd0;                // (40) Because this card does not generate INT's
+                    6'h21: D_OUT <= 4'd0;                // (42) Because this card does not generate INT's
 
-                    default: data_out <= 4'hF;
+                    default: D_OUT <= 4'hF;
 
                 endcase
 
@@ -149,7 +133,6 @@ always @(negedge RESET_n or posedge C7M) begin
                         end
                     end
                     6'h25: begin    // Written first (4A)
-                        // if (config_out_n == CONFIGURING_RAM) BASE_RAM[3:0] <= D_IN;
                         if (config_out_n == CONFIGURING_SDIO) BASE_SDIO[3:0] <= D_IN;
                     end
                     6'h26: begin    // (4C) "Shut up" address, if KS decides to not configure a specific device

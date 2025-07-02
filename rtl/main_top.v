@@ -22,6 +22,7 @@ module main_top(
     input wire BGACK_n,
     input wire BG_68SEC000_n,
     input wire E_IN,
+    input wire AS_MB_n_IN,
     input wire [15:12] D_IN,
     output wire [15:12] D_OUT,
     output wire [15:12] D_OE,
@@ -36,7 +37,8 @@ module main_top(
     output wire WE_BANK0_EVEN_n,
     output wire WE_BANK1_EVEN_n,
     output wire DTACK_CPU_n,
-    output wire AS_MB_n,
+    output wire AS_MB_n_OUT,
+    output wire AS_MB_n_OE,
     output reg E_OE,
     output reg BR_68SEC000_n,
     output reg BOSS_n_OUT,
@@ -61,6 +63,7 @@ reg enable_dma;
 
 wire C7M = ~C7M_n;
 wire m6800_dtack_n;
+wire as_n = BR_68SEC000_n ? AS_CPU_n : AS_MB_n_IN;
 wire ds_n = LDS_n & UDS_n;  // Data Strobe
 wire [7:5] base_ram;        // base address for the RAM_CARD in Z2-space. (A23-A21)
 wire [7:0] base_sdio;       // base address for the SDIO_CARD in Z2-space. (A23-A16)
@@ -72,7 +75,8 @@ wire sdio_configured_n;     // keeps track if SDIO_CARD is autoconfigured ok.
 
 assign CLKCPU = C7M;
 assign DTACK_CPU_n = DTACK_MB_n & m6800_dtack_n;
-assign AS_MB_n = AS_CPU_n;
+assign AS_MB_n_OUT = AS_CPU_n;
+assign AS_MB_n_OE = BR_68SEC000_n;
 
 //Bootstrapping and bus arbitration
 always @ (negedge RESET_n or posedge C7M) begin
@@ -180,7 +184,7 @@ fastram ramcontrol(
     .RW_n(RW_n),
     .UDS_n(UDS_n),
     .LDS_n(LDS_n),
-    .AS_n(AS_CPU_n),
+    .AS_n(as_n),
     .DS_n(ds_n),
     .BASE_RAM(base_ram[7:5]),
     .RAM_CONFIGURED_n(ram_configured_n),

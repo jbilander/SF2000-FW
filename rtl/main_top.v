@@ -73,10 +73,13 @@ wire ram_access;            // keeps track if local SRAM is being accessed.
 wire sdio_configured_n;     // keeps track if SDIO_CARD is autoconfigured ok.
 //wire sdio_access;           // keeps track if the SDIO is being accessed.
 
+wire ram_dtack_n = AS_CPU_n ? 1'b1 : !ram_access;
+
 assign CLKCPU = C7M;
-assign DTACK_CPU_n = DTACK_MB_n & m6800_dtack_n;
+assign DTACK_CPU_n = DTACK_MB_n & m6800_dtack_n & ram_dtack_n;
 assign AS_MB_n_OUT = AS_CPU_n;
-assign AS_MB_n_OE = BR_68SEC000_n;
+assign AS_MB_n_OE = BR_68SEC000_n & !ram_access;
+
 
 //Bootstrapping and bus arbitration
 always @ (negedge RESET_n or posedge C7M) begin

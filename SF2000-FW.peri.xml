@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<efxpt:design_db name="SF2000-FW" device_def="T8Q144" version="2024.2.294" db_version="20242999" last_change_date="Wed Jul  2 11:01:45 2025" xmlns:efxpt="http://www.efinixinc.com/peri_design_db" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.efinixinc.com/peri_design_db peri_design_db.xsd ">
+<efxpt:design_db name="SF2000-FW" device_def="T8Q144" version="2024.2.294" db_version="20242999" last_change_date="Wed Jul  2 12:39:38 2025" xmlns:efxpt="http://www.efinixinc.com/peri_design_db" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.efinixinc.com/peri_design_db peri_design_db.xsd ">
     <efxpt:device_info>
         <efxpt:iobank_info>
             <efxpt:iobank name="1A" iostd="3.3 V LVTTL / LVCMOS"/>
@@ -25,8 +25,8 @@
             <efxpt:input_config name="AS_CPU_n" name_ddio_lo="" conn_type="normal" is_register="false" clock_name="" is_clock_inverted="false" pull_option="weak pullup" is_schmitt_trigger="false" ddio_type="none"/>
         </efxpt:gpio>
         <efxpt:gpio name="AS_MB_n" gpio_def="GPIOB_RXP02" mode="inout" bus_name="" is_lvds_gpio="true" io_standard="3.3 V LVTTL / LVCMOS">
-            <efxpt:input_config name="AS_MB_n_IN" name_ddio_lo="" conn_type="normal" is_register="false" clock_name="" is_clock_inverted="false" pull_option="weak pullup" is_schmitt_trigger="true" ddio_type="none"/>
-            <efxpt:output_config name="AS_MB_n_OUT" name_ddio_lo="" register_option="none" clock_name="" is_clock_inverted="false" is_slew_rate="false" tied_option="none" ddio_type="none" drive_strength="3"/>
+            <efxpt:input_config name="AS_MB_n_IN" name_ddio_lo="" conn_type="normal" is_register="false" clock_name="" is_clock_inverted="false" pull_option="weak pullup" is_schmitt_trigger="false" ddio_type="none"/>
+            <efxpt:output_config name="AS_MB_n_OUT" name_ddio_lo="" register_option="none" clock_name="" is_clock_inverted="false" is_slew_rate="false" tied_option="none" ddio_type="none" drive_strength="1"/>
             <efxpt:output_enable_config name="AS_MB_n_OE" is_register="false" clock_name="" is_clock_inverted="false"/>
         </efxpt:gpio>
         <efxpt:gpio name="A[10]" gpio_def="GPIOR_83" mode="input" bus_name="A" is_lvds_gpio="false" io_standard="3.3 V LVTTL / LVCMOS">

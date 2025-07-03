@@ -3,7 +3,10 @@
 
 module main_top(
 
+    input wire JP1,
     input wire JP2,
+    input wire pll_inst1_CLKOUT0,
+    input wire pll_inst1_CLKOUT1,
     input wire C7M_n,
     input wire RESET_n,
     input wire CFGIN_n,
@@ -60,7 +63,10 @@ JP4: 4/8 MB SRAM
 
 reg bootstrap = 1'b1;
 reg enable_dma;
+reg ram_dtack_n = 1'b1;
 
+wire C40M;
+wire C50M;
 wire C7M = ~C7M_n;
 wire m6800_dtack_n;
 wire as_n = BR_68SEC000_n ? AS_CPU_n : AS_MB_n_IN;
@@ -73,13 +79,19 @@ wire ram_access;            // keeps track if local SRAM is being accessed.
 wire sdio_configured_n;     // keeps track if SDIO_CARD is autoconfigured ok.
 //wire sdio_access;           // keeps track if the SDIO is being accessed.
 
-wire ram_dtack_n = AS_CPU_n ? 1'b1 : !ram_access;
-
 assign CLKCPU = C7M;
 assign DTACK_CPU_n = DTACK_MB_n & m6800_dtack_n & ram_dtack_n;
 assign AS_MB_n_OUT = AS_CPU_n;
 assign AS_MB_n_OE = BR_68SEC000_n & !ram_access;
 
+always @(posedge CLKCPU or posedge AS_CPU_n) begin
+
+    if (AS_CPU_n) begin
+        ram_dtack_n <= 1'b1;
+    end else begin
+        ram_dtack_n <= !ram_access;
+    end
+end
 
 //Bootstrapping and bus arbitration
 always @ (negedge RESET_n or posedge C7M) begin
@@ -135,18 +147,12 @@ always @ (negedge RESET_n or posedge C7M) begin
     end
 end
 
-/*
 clock clkcontrol(
-    .JP1(JP1),
-    .C14M(C14M),
     .C80M(pll_inst1_CLKOUT0),
     .C100M(pll_inst1_CLKOUT1),
-    .C7M(C7M),
     .C40M(C40M),
-    .C50M(C50M),
-    .CLKCPU(CLKCPU)
+    .C50M(C50M)
 );
-*/
 
 m6800 m6800_bus(
     .JP2(JP2),

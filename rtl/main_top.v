@@ -62,8 +62,10 @@ JP4: 4/8 MB SRAM
 */
 
 reg bootstrap = 1'b1;
-reg enable_dma;
-reg ram_dtack_n = 1'b1;
+reg dma_en;
+reg mobo_dtack_n = 1'b1;
+reg mobo_as_n = 1'b1;
+reg fast_dtack_n = 1'b1;
 
 wire C40M;
 wire C50M;
@@ -79,17 +81,47 @@ wire ram_access;            // keeps track if local SRAM is being accessed.
 wire sdio_configured_n;     // keeps track if SDIO_CARD is autoconfigured ok.
 //wire sdio_access;           // keeps track if the SDIO is being accessed.
 
-assign CLKCPU = C7M;
-assign DTACK_CPU_n = DTACK_MB_n & m6800_dtack_n & ram_dtack_n;
-assign AS_MB_n_OUT = AS_CPU_n;
-assign AS_MB_n_OE = BR_68SEC000_n & !ram_access;
+assign CLKCPU = JP1 ? C40M : C7M;
+assign DTACK_CPU_n = JP1 ? mobo_dtack_n & m6800_dtack_n & fast_dtack_n : DTACK_MB_n & m6800_dtack_n;
+assign AS_MB_n_OUT = JP1 ? mobo_as_n : AS_CPU_n;
+assign AS_MB_n_OE = BR_68SEC000_n;
+
+//Handle synchronization with motherboard
+always @(negedge RESET_n or posedge C7M or posedge AS_CPU_n) begin
+
+    if (!RESET_n) begin
+
+        mobo_as_n <= 1'b1;
+        mobo_dtack_n <= 1'b1;
+
+    end else begin
+
+        if (AS_CPU_n) begin
+
+            mobo_as_n <= 1'b1;
+            mobo_dtack_n <= 1'b1;
+
+        end else begin
+
+            mobo_as_n <= AS_CPU_n | ram_access;
+            mobo_dtack_n <= DTACK_MB_n;
+
+        end
+
+    end
+
+end
 
 always @(posedge CLKCPU or posedge AS_CPU_n) begin
 
     if (AS_CPU_n) begin
-        ram_dtack_n <= 1'b1;
+
+        fast_dtack_n <= 1'b1;
+
     end else begin
-        ram_dtack_n <= !ram_access;
+
+        fast_dtack_n <= !(BR_68SEC000_n & ram_access);
+
     end
 end
 
@@ -99,7 +131,7 @@ always @ (negedge RESET_n or posedge C7M) begin
     if (!RESET_n) begin
 
         bootstrap <= 1'b1;
-        enable_dma <= 1'b0;
+        dma_en <= 1'b0;
         BOSS_n_OE <= 1'b0;
         BR_68SEC000_n <= 1'b0;
         BR_n_OUT <= 1'b0;
@@ -122,19 +154,19 @@ always @ (negedge RESET_n or posedge C7M) begin
                     BOSS_n_OUT <= 1'b0;
                     BOSS_n_OE <= 1'b1;
                     BR_n_OE <= 1'b0;
-                    enable_dma <= 1'b1;
+                    dma_en <= 1'b1;
 
                 end else begin //Plugged into a A500 or A2000 rev 4
 
                     BR_n_OE <= !BG_n_IN;
-                    enable_dma <= BG_n_IN; //The socketed internal 68k cpu has to be removed to enable DMA.
+                    dma_en <= BG_n_IN; //The socketed internal 68k cpu has to be removed to enable DMA.
 
                 end
             end
 
         end else begin
 
-            if (enable_dma) begin
+            if (dma_en) begin
 
                 BR_n_OE <= 1'b0;
                 BR_68SEC000_n <= BR_n_IN & BGACK_n; //Three to two wire bus arbitration mapping

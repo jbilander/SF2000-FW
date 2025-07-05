@@ -35,15 +35,30 @@ localparam [15:0] SERIAL        = 16'd0;
 
 reg [1:0] configured_n = 2'b11;
 reg [1:0] shutup_n = 2'b11;
+reg [1:0] config_out_n = 2'b11;
 
 wire autoconfig_access = !CFGIN_n && CFGOUT_n && (A_HIGH == 8'hE8) && !AS_CPU_n;
-wire [1:0] config_out_n = configured_n & shutup_n;
+//wire [1:0] config_out_n = configured_n & shutup_n;
 
 assign RAM_CONFIGURED_n = configured_n[RAM_CARD];
 assign SDIO_CONFIGURED_n = configured_n[SDIO_CARD];
 
 assign CFGOUT_n = |config_out_n;
 assign D_OE  = autoconfig_access && RW_n && !DS_n ? 4'hF : 4'h0;
+
+
+always @(negedge RESET_n or posedge C7M or posedge AS_CPU_n) begin
+
+    if (!RESET_n) begin
+
+        config_out_n <= 2'b11;
+
+    end else begin
+
+        if (AS_CPU_n) config_out_n <= configured_n & shutup_n;
+
+    end
+end
 
 always @(negedge RESET_n or posedge C7M) begin
 

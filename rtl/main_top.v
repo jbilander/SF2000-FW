@@ -42,6 +42,7 @@ module main_top(
     output wire DTACK_CPU_n,
     output wire AS_MB_n_OUT,
     output wire AS_MB_n_OE,
+    output wire ROM_OE_n,
     output reg E_OE,
     output reg BR_68SEC000_n,
     output reg BOSS_n_OUT,
@@ -79,7 +80,7 @@ wire [7:0] base_sdio;       // base address for the SDIO_CARD in Z2-space. (A23-
 wire ram_configured_n;      // keeps track if RAM_CARD is autoconfigured ok.
 wire ram_access;            // keeps track if local SRAM is being accessed.
 wire sdio_configured_n;     // keeps track if SDIO_CARD is autoconfigured ok.
-//wire sdio_access;           // keeps track if the SDIO is being accessed.
+wire sdio_access;           // keeps track if the SDIO is being accessed.
 
 assign CLKCPU = JP1 ? C40M : C7M;
 assign DTACK_CPU_n = JP1 ? mobo_dtack_n & m6800_dtack_n & fast_dtack_n : DTACK_MB_n & m6800_dtack_n;
@@ -236,6 +237,19 @@ fastram ramcontrol(
     .WE_BANK0_EVEN_n(WE_BANK0_EVEN_n),
     .WE_BANK1_EVEN_n(WE_BANK1_EVEN_n),
     .RAM_ACCESS(ram_access)
+);
+
+sdio sdcontrol(
+    .C7M(C7M),
+    .CLKCPU(CLKCPU),
+    .RESET_n(RESET_n),
+    .A_HIGH(A[23:16]),
+    .RW_n(RW_n),
+    .AS_CPU_n(AS_CPU_n),
+    .BASE_SDIO(base_sdio[7:0]),
+    .SDIO_CONFIGURED_n(sdio_configured_n),
+    .ROM_OE_n(ROM_OE_n),
+    .SDIO_ACCESS(sdio_access)
 );
 
 endmodule

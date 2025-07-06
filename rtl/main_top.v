@@ -94,13 +94,19 @@ localparam cnt_max_value = 32'd100000000;
 wire ds_n = LDS_n & UDS_n;      // Data Strobe
 wire [7:5] base_ram;            // base address for the RAM_CARD in Z2-space. (A23-A21)
 wire [7:0] base_ide;            // base address for the IDE_CARD in Z2-space. (A23-A16)
+wire [7:0] base_sd;             // base address for the SD_CARD in Z2-space. (A23-A16)
 
 wire ram_configured_n;          // keeps track if RAM_CARD is autoconfigured ok.
 wire ram_access;                // keeps track if local SRAM is being accessed.
 wire ide_configured_n;          // keeps track if IDE_CARD is autoconfigured ok.
 wire ide_access;                // keeps track if the IDE is being accessed.
+wire sd_configured_n;           // keeps track if SDs_CARD is autoconfigured ok.
+wire sd_access;                 // keeps track if the sd is being accessed.
 wire flash_access;              // keeps track if the Flash is being accessed.
 wire sdcard_access;
+
+wire ide_rom_oe_n;
+wire sd_rom_oe_n;
 
 wire as_internal = AS_CPU_n || ram_access || ide_access || flash_access || sdcard_access;
 wire as_n = dma_n ? AS_CPU_n : AS_MB_n;
@@ -120,7 +126,7 @@ assign AS_MB_n = dma_n ? cpu_speed_switch ? as_internal : as_internal_fast : 1'b
 
 
 assign ROM_B1 = JP8;
-assign ROM_B2 = rom_pin2;
+assign ROM_B2 = sdcard_access;
 assign ROM_WE_n = rom_pin31;
 
 //Set the CPU speed switch after the PLL generated clocks have stabilized, we boot on 7 MHz...
@@ -250,8 +256,10 @@ autoconfig_zii autoconfig(
     .data_oe(ac_data_oe),
     .BASE_RAM(base_ram[7:5]),
     .BASE_IDE(base_ide[7:0]),
+    .BASE_SD(base_sd[7:0]),
     .RAM_CONFIGURED_n(ram_configured_n),
     .IDE_CONFIGURED_n(ide_configured_n),
+    .SD_CONFIGURED_n(sd_configured_n),
     .CFGOUT_n(CFGOUT_n)
 );
 
@@ -291,7 +299,7 @@ ata idecontrol(
     .JP3(JP3),
     .JP4(JP4),
     .CPU_SPEED_SWITCH(cpu_speed_switch),
-    .ROM_OE_n(ROM_OE_n),
+    .ROM_OE_n(ide_rom_oe_n),
     .IDE_IOR_n(IDE_IOR_n),
     .IDE_IOW_n(IDE_IOW_n),
     .IDE_CS_n(IDE_CS_n[1:0]),
@@ -324,10 +332,11 @@ wire [15:0] sd_data_in = D;
 wire [15:0] sd_data_out;
 wire sd_data_oe;
 
-assign sdcard_access = !AS_CPU_n && A[23:16] == 8'hEE;
+assign sdcard_access = !AS_CPU_n && A[23:16] == base_sd && sd_configured_n == 0;
 
 sdcard sdcard_inst(
     .C100M(OSC_CLK_X1),
+    .CLKCPU(CLKCPU),
     .RESET_n(RESET_n),
 
     .ADDR(A),
@@ -341,7 +350,7 @@ sdcard sdcard_inst(
     .data_in(sd_data_in),
     .data_out(sd_data_out),
     .data_oe(sd_data_oe),
-
+    .ROM_OE_n(sd_rom_oe_n),
     .INT2_n(INT2_n),
 
     .SS_n(SD_SS_n),
@@ -350,6 +359,8 @@ sdcard sdcard_inst(
     .MISO(SD_MISO),
     .CD_n(SD_CD_n)
 );
+
+assign ROM_OE_n = ide_rom_oe_n && sd_rom_oe_n;
 
 wire [15:0] data_out = ac_data_oe ? ac_data_out : sd_data_out;
 wire data_oe = ac_data_oe || sd_data_oe;

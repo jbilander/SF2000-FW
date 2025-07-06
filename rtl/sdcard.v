@@ -1,5 +1,6 @@
 module sdcard(
     input C100M,
+    input CLKCPU,
     input RESET_n,
 
     input [23:1] ADDR,
@@ -9,6 +10,7 @@ module sdcard(
     input LDS_n,
 
     output dtack_n,
+    output reg ROM_OE_n,
 
     input [15:0] data_in,
     output reg [15:0] data_out,
@@ -37,7 +39,26 @@ localparam ADDR_INTACT = 7;
 wire ds_n = UDS_n && LDS_n;
 
 wire wr_access = access && !ds_n && !RW;
-wire rd_access = access && !ds_n && RW;
+wire rd_access = access && !ds_n && RW && sd_enabled;
+wire rom_access = access && RW && !sd_enabled; // ROM enabled before first write
+
+reg sd_enabled = 0;
+
+always @(posedge CLKCPU or negedge RESET_n) begin
+    if (!RESET_n) begin
+        sd_enabled <= 1'b0;
+        ROM_OE_n <= 1'b1;
+    end else begin
+        if (wr_access)
+            sd_enabled <= 1'b1; // Enable SD interface on first write
+
+        if (rom_access) begin
+            ROM_OE_n <= 1'b0;
+        end else begin
+            ROM_OE_n <= 1'b1;
+        end
+    end
+end
 
 assign data_oe = rd_access;
 assign dtack_n = !access;

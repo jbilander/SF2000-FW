@@ -71,7 +71,7 @@ wire C40M;
 wire C50M;
 wire C7M = ~C7M_n;
 wire m6800_dtack_n;
-wire as_n = BR_68SEC000_n ? AS_CPU_n : AS_MB_n_IN;
+wire as_n = BG_68SEC000_n ? AS_CPU_n : AS_MB_n_IN;
 wire ds_n = LDS_n & UDS_n;  // Data Strobe
 wire [7:5] base_ram;        // base address for the RAM_CARD in Z2-space. (A23-A21)
 wire [7:0] base_sdio;       // base address for the SDIO_CARD in Z2-space. (A23-A16)
@@ -84,7 +84,7 @@ wire sdio_configured_n;     // keeps track if SDIO_CARD is autoconfigured ok.
 assign CLKCPU = JP1 ? C40M : C7M;
 assign DTACK_CPU_n = JP1 ? mobo_dtack_n & m6800_dtack_n & fast_dtack_n : DTACK_MB_n & m6800_dtack_n;
 assign AS_MB_n_OUT = JP1 ? mobo_as_n : AS_CPU_n;
-assign AS_MB_n_OE = BR_68SEC000_n;
+assign AS_MB_n_OE = BG_68SEC000_n;
 
 //Handle synchronization with motherboard
 always @(negedge RESET_n or posedge C7M or posedge AS_CPU_n) begin
@@ -120,7 +120,7 @@ always @(posedge CLKCPU or posedge AS_CPU_n) begin
 
     end else begin
 
-        fast_dtack_n <= !(BR_68SEC000_n & ram_access);
+        fast_dtack_n <= !(BG_68SEC000_n & ram_access);
 
     end
 end

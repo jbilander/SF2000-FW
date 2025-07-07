@@ -36,7 +36,6 @@ reg [1:0] shutup_n = 2'b11;
 reg [1:0] config_out_n = 2'b11;
 
 wire autoconfig_access = !CFGIN_n && CFGOUT_n && (A_HIGH == 8'hE8) && !AS_CPU_n;
-//wire [1:0] config_out_n = configured_n & shutup_n;
 
 assign RAM_CONFIGURED_n = configured_n[RAM_CARD];
 assign SDIO_CONFIGURED_n = configured_n[SDIO_CARD];

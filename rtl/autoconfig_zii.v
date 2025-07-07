@@ -26,12 +26,10 @@ localparam SDIO_CARD = 1'b1;
 localparam CONFIGURING_RAM  = 2'b11;
 localparam CONFIGURING_SDIO = 2'b10;
 
-localparam [15:0] MFG_ID        = 16'h082C; // 2092   - BSC
-localparam [7:0]  RAM_PROD_ID   = 8'd8;     // 2092/8 - Oktagon 2008, BSC Memory Master (8M)
-localparam [7:0]  SDIO_PROD_ID  = 8'd6;     // 2092/6 - Oktagon 2008, BSC I/O device (64K)
+localparam [15:0] MFG_ID        = 16'h144A; // 5194    - OAHR (Open Amiga Hardware Repository)
+localparam [7:0]  RAM_PROD_ID   = 8'd10;    // 5194/10 - SF2000, Memory Master (4M/8M)
+localparam [7:0]  SDIO_PROD_ID  = 8'd11;    // 5194/11 - SF2000, SD card controller I/O device (64K)
 localparam [15:0] SERIAL        = 16'd0;
-
-// SysInfo reports it as a BSC Oktagon 2008 Z2 memory and a BSC Oktagon I/O device.
 
 reg [1:0] configured_n = 2'b11;
 reg [1:0] shutup_n = 2'b11;

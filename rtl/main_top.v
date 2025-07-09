@@ -67,9 +67,11 @@ reg dma_en;
 reg mobo_dtack_n = 1'b1;
 reg mobo_as_n = 1'b1;
 reg fast_dtack_n = 1'b1;
+reg cpu_speed_switch = JP1 ? 1'b1 : 1'b0;
+reg switch_state = JP1 ? 1'b1 : 1'b0;
 
 wire C40M;
-wire C50M;
+wire C100M = pll_inst1_CLKOUT1;
 wire C7M = ~C7M_n;
 wire m6800_dtack_n;
 wire as_n = BG_68SEC000_n ? AS_CPU_n : AS_MB_n_IN;
@@ -82,10 +84,49 @@ wire ram_access;            // keeps track if local SRAM is being accessed.
 wire sdio_configured_n;     // keeps track if SDIO_CARD is autoconfigured ok.
 wire sdio_access;           // keeps track if the SDIO is being accessed.
 
-assign CLKCPU = JP1 ? C40M : C7M;
-assign DTACK_CPU_n = JP1 ? mobo_dtack_n & m6800_dtack_n & fast_dtack_n : DTACK_MB_n & m6800_dtack_n;
-assign AS_MB_n_OUT = JP1 ? mobo_as_n : AS_CPU_n;
+assign CLKCPU = cpu_speed_switch ? C40M : C7M;
+assign DTACK_CPU_n = cpu_speed_switch ? mobo_dtack_n & m6800_dtack_n & fast_dtack_n : DTACK_MB_n & m6800_dtack_n;
+assign AS_MB_n_OUT = cpu_speed_switch ? mobo_as_n : AS_CPU_n;
 assign AS_MB_n_OE = BG_68SEC000_n;
+
+
+parameter DEBOUNCE_LIMIT = 2000000; // 20 ms at 100 MHz
+reg [20:0] count;                   // debounce counter
+
+//Handle cpu speed switch with debounce
+always @(negedge RESET_n or posedge C100M) begin
+
+    if (!RESET_n) begin
+
+        count <= 1'b0;
+        cpu_speed_switch <= JP1;
+        switch_state <= JP1;
+
+    end else begin
+
+        if (switch_state != JP1 && count < DEBOUNCE_LIMIT) begin
+
+            count <= count + 1'b1;
+
+        end else if (count == DEBOUNCE_LIMIT) begin
+
+            switch_state <= JP1;
+            count <= 1'b0;
+
+        end else begin
+
+            count <= 1'b0;
+
+        end
+
+        //Wait until bus-cycle has reached (S7) before hot-switching to new cpu speed
+        if (AS_CPU_n && DTACK_CPU_n) begin
+
+            cpu_speed_switch <= switch_state;
+
+        end
+    end
+end
 
 //Handle synchronization with motherboard
 always @(negedge RESET_n or posedge C7M or posedge AS_CPU_n) begin
@@ -108,11 +149,10 @@ always @(negedge RESET_n or posedge C7M or posedge AS_CPU_n) begin
             mobo_dtack_n <= DTACK_MB_n;
 
         end
-
     end
-
 end
 
+//Handle fast dtack
 always @(posedge CLKCPU or posedge AS_CPU_n) begin
 
     if (AS_CPU_n) begin
@@ -182,9 +222,7 @@ end
 
 clock clkcontrol(
     .C80M(pll_inst1_CLKOUT0),
-    .C100M(pll_inst1_CLKOUT1),
-    .C40M(C40M),
-    .C50M(C50M)
+    .C40M(C40M)
 );
 
 m6800 m6800_bus(

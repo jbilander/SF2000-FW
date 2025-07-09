@@ -69,8 +69,8 @@ reg mobo_as_n = 1'b1;
 reg fast_dtack_n = 1'b1;
 reg cpu_speed_switch = JP1 ? 1'b1 : 1'b0;
 reg switch_state = JP1 ? 1'b1 : 1'b0;
+reg turbo_clk;
 
-wire C40M;
 wire C100M = pll_inst1_CLKOUT1;
 wire C7M = ~C7M_n;
 wire m6800_dtack_n;
@@ -84,11 +84,10 @@ wire ram_access;            // keeps track if local SRAM is being accessed.
 wire sdio_configured_n;     // keeps track if SDIO_CARD is autoconfigured ok.
 wire sdio_access;           // keeps track if the SDIO is being accessed.
 
-assign CLKCPU = cpu_speed_switch ? C40M : C7M;
+assign CLKCPU = cpu_speed_switch ? turbo_clk : C7M;
 assign DTACK_CPU_n = cpu_speed_switch ? mobo_dtack_n & m6800_dtack_n & fast_dtack_n : DTACK_MB_n & m6800_dtack_n;
 assign AS_MB_n_OUT = cpu_speed_switch ? mobo_as_n : AS_CPU_n;
 assign AS_MB_n_OE = BG_68SEC000_n;
-
 
 parameter DEBOUNCE_LIMIT = 2000000; // 20 ms at 100 MHz
 reg [20:0] count;                   // debounce counter
@@ -126,6 +125,11 @@ always @(negedge RESET_n or posedge C100M) begin
 
         end
     end
+end
+
+//Generate the turbo clock
+always @ (posedge pll_inst1_CLKOUT0) begin
+    turbo_clk <= ~turbo_clk;
 end
 
 //Handle synchronization with motherboard
@@ -220,11 +224,6 @@ always @ (negedge RESET_n or posedge C7M) begin
     end
 end
 
-clock clkcontrol(
-    .C80M(pll_inst1_CLKOUT0),
-    .C40M(C40M)
-);
-
 m6800 m6800_bus(
     .JP2(JP2),
     .C7M(C7M),
@@ -278,7 +277,6 @@ fastram ramcontrol(
 );
 
 sdio sdcontrol(
-    .C7M(C7M),
     .CLKCPU(CLKCPU),
     .RESET_n(RESET_n),
     .A_HIGH(A[23:16]),

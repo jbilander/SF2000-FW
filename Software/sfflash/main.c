@@ -29,8 +29,8 @@
 #include "main.h"
 #include "config.h"
 
-#define MANUF_ID 2092
-#define PROD_ID  6
+#define MANUF_ID 5194
+#define PROD_ID  10
 
 void *flashbase;
 

@@ -91,8 +91,8 @@ wire sdio_access;           // keeps track if the SDIO is being accessed.
 wire flash_access;          // keeps track if the Flash is being accessed.
 
 assign CLKCPU = cpu_speed_switch ? turbo_clk : C7M;
-assign DTACK_CPU_n = cpu_speed_switch ? mobo_dtack_n & m6800_dtack_n & fast_dtack_n : DTACK_MB_n & m6800_dtack_n;
-assign AS_MB_n_OUT = cpu_speed_switch ? mobo_as_n : AS_CPU_n;
+assign DTACK_CPU_n = cpu_speed_switch ? mobo_dtack_n & m6800_dtack_n & fast_dtack_n : DTACK_MB_n & m6800_dtack_n & flash_dtack_n;
+assign AS_MB_n_OUT = cpu_speed_switch ? mobo_as_n : AS_CPU_n | flash_access;
 assign AS_MB_n_OE = BG_68SEC000_n;
 
 parameter DEBOUNCE_LIMIT = 2000000; // 20 ms at 100 MHz

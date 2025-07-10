@@ -1,19 +1,14 @@
 module flash (
-    input [23:1] A,
-    input AS_CPU_n,
-    input CLKCPU,
-    input RESET_n,
-    input DS_n,
-    input RW_n,
-    input JP2,
-    input JP3,
-    input JP4,
-    input JP9,
-    input CPU_SPEED_SWITCH,
-    input FLASH_BUSY_n,
-    output FLASH_ACCESS,
-    output FLASH_A19,
-    output FLASH_RESET_n,
+    input wire [23:16] A,
+    input wire AS_CPU_n,
+    input wire CLKCPU,
+    input wire RESET_n,
+    input wire DS_n,
+    input wire RW_n,
+    input wire JP3,
+    input wire CPU_SPEED_SWITCH,
+    output wire FLASH_ACCESS,
+    output wire FLASH_A19,
     output reg FLASH_WE_n = 1'b1,
     output reg FLASH_OE_n = 1'b1,
     output reg DTACK_n = 1'b1
@@ -23,11 +18,9 @@ reg OVL;
 reg maprom_enabled;
 reg [2:0] counter;
 
-wire [2:0] clksel = {JP2, JP3, JP4};
-wire [2:0] delay_cnt = !CPU_SPEED_SWITCH && (clksel == 3'b101 || clksel == 3'b110) ? (JP9 ? 3'd2 : 3'd3) : 3'd0;
+wire [2:0] delay_cnt = CPU_SPEED_SWITCH ? 3'd3 : 3'd0;
 
 assign FLASH_A19 = A[19] || OVL; // Force bank 1 for early boot overlay.
-assign FLASH_RESET_n = RESET_n;
 
 assign FLASH_ACCESS = A[23:20] == 4'hA     && !maprom_enabled               || // $A00000-AFFFFF
                       A[23:20] == 4'b0     &&  maprom_enabled && OVL        || // $000000-0FFFFF - Early boot overlay
@@ -64,7 +57,7 @@ always @(posedge CLKCPU) begin
         FLASH_OE_n     <= 1;
         FLASH_WE_n     <= 1;
         OVL            <= 1;
-        maprom_enabled <= ~JP9; // Enable flash overlay at next boot
+        maprom_enabled <= ~JP3; // Enable flash overlay at next boot
 
     end else begin
 

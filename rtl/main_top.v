@@ -5,13 +5,14 @@ module main_top(
 
     input wire JP1,
     input wire JP2,
+    input wire JP3,
+    input wire JP4,
     input wire pll_inst1_CLKOUT0,
     input wire pll_inst1_CLKOUT1,
     input wire C7M_n,
     input wire RESET_n,
     input wire CFGIN_n,
     input wire [23:1] A,
-    input wire JP4,
     input wire RW_n,
     input wire UDS_n,
     input wire LDS_n,
@@ -43,6 +44,9 @@ module main_top(
     output wire AS_MB_n_OUT,
     output wire AS_MB_n_OE,
     output wire ROM_OE_n,
+    output wire FLASH_A19,
+    output wire FLASH_WE_n,
+    output wire FLASH_OE_n,
     output reg E_OE,
     output reg BR_68SEC000_n,
     output reg BOSS_n_OUT,
@@ -74,6 +78,7 @@ reg turbo_clk;
 wire C100M = pll_inst1_CLKOUT1;
 wire C7M = ~C7M_n;
 wire m6800_dtack_n;
+wire flash_dtack_n;
 wire as_n = BG_68SEC000_n ? AS_CPU_n : AS_MB_n_IN;
 wire ds_n = LDS_n & UDS_n;  // Data Strobe
 wire [7:5] base_ram;        // base address for the RAM_CARD in Z2-space. (A23-A21)
@@ -83,6 +88,7 @@ wire ram_configured_n;      // keeps track if RAM_CARD is autoconfigured ok.
 wire ram_access;            // keeps track if local SRAM is being accessed.
 wire sdio_configured_n;     // keeps track if SDIO_CARD is autoconfigured ok.
 wire sdio_access;           // keeps track if the SDIO is being accessed.
+wire flash_access;          // keeps track if the Flash is being accessed.
 
 assign CLKCPU = cpu_speed_switch ? turbo_clk : C7M;
 assign DTACK_CPU_n = cpu_speed_switch ? mobo_dtack_n & m6800_dtack_n & fast_dtack_n : DTACK_MB_n & m6800_dtack_n;
@@ -149,7 +155,7 @@ always @(negedge RESET_n or posedge C7M or posedge AS_CPU_n) begin
 
         end else begin
 
-            mobo_as_n <= AS_CPU_n | ram_access;
+            mobo_as_n <= AS_CPU_n | ram_access | flash_access;
             mobo_dtack_n <= DTACK_MB_n;
 
         end
@@ -165,7 +171,7 @@ always @(posedge CLKCPU or posedge AS_CPU_n) begin
 
     end else begin
 
-        fast_dtack_n <= !(BG_68SEC000_n & ram_access);
+        fast_dtack_n <= !(BG_68SEC000_n & ram_access) & flash_dtack_n;
 
     end
 end
@@ -286,6 +292,22 @@ sdio sdcontrol(
     .SDIO_CONFIGURED_n(sdio_configured_n),
     .ROM_OE_n(ROM_OE_n),
     .SDIO_ACCESS(sdio_access)
+);
+
+flash romoverlay(
+    .A(A[23:16]),
+    .AS_CPU_n(AS_CPU_n),
+    .CLKCPU(CLKCPU),
+    .RESET_n(RESET_n),
+    .DS_n(ds_n),
+    .RW_n(RW_n),
+    .JP3(JP3),
+    .CPU_SPEED_SWITCH(cpu_speed_switch),
+    .FLASH_A19(FLASH_A19),
+    .FLASH_ACCESS(flash_access),
+    .FLASH_OE_n(FLASH_OE_n),
+    .FLASH_WE_n(FLASH_WE_n),
+    .DTACK_n(flash_dtack_n)
 );
 
 endmodule

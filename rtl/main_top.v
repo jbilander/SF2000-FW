@@ -70,7 +70,6 @@ reg bootstrap = 1'b1;
 reg dma_en;
 reg mobo_dtack_n = 1'b1;
 reg mobo_as_n = 1'b1;
-reg fast_dtack_n = 1'b1;
 reg cpu_speed_switch = JP1 ? 1'b1 : 1'b0;
 reg switch_state = JP1 ? 1'b1 : 1'b0;
 reg turbo_clk;
@@ -78,7 +77,9 @@ reg turbo_clk;
 wire C100M = pll_inst1_CLKOUT1;
 wire C7M = ~C7M_n;
 wire m6800_dtack_n;
+wire ram_dtack_n;
 wire flash_dtack_n;
+
 wire as_n = BG_68SEC000_n ? AS_CPU_n : AS_MB_n_IN;
 wire ds_n = LDS_n & UDS_n;  // Data Strobe
 wire [7:5] base_ram;        // base address for the RAM_CARD in Z2-space. (A23-A21)
@@ -90,9 +91,12 @@ wire sdio_configured_n;     // keeps track if SDIO_CARD is autoconfigured ok.
 wire sdio_access;           // keeps track if the SDIO is being accessed.
 wire flash_access;          // keeps track if the Flash is being accessed.
 
+wire as_mobo_n = AS_CPU_n | ram_access | flash_access;
+wire dtack_mobo_n = cpu_speed_switch ? mobo_dtack_n : DTACK_MB_n;
+
 assign CLKCPU = cpu_speed_switch ? turbo_clk : C7M;
-assign DTACK_CPU_n = cpu_speed_switch ? mobo_dtack_n & m6800_dtack_n & fast_dtack_n : DTACK_MB_n & m6800_dtack_n & flash_dtack_n;
-assign AS_MB_n_OUT = cpu_speed_switch ? mobo_as_n : AS_CPU_n | flash_access;
+assign DTACK_CPU_n = dtack_mobo_n & m6800_dtack_n & ram_dtack_n & flash_dtack_n;
+assign AS_MB_n_OUT = cpu_speed_switch ? mobo_as_n : as_mobo_n;
 assign AS_MB_n_OE = BG_68SEC000_n;
 
 parameter DEBOUNCE_LIMIT = 2000000; // 20 ms at 100 MHz
@@ -155,24 +159,10 @@ always @(negedge RESET_n or posedge C7M or posedge AS_CPU_n) begin
 
         end else begin
 
-            mobo_as_n <= AS_CPU_n | ram_access | flash_access;
+            mobo_as_n <= as_mobo_n;
             mobo_dtack_n <= DTACK_MB_n;
 
         end
-    end
-end
-
-//Handle fast dtack
-always @(posedge CLKCPU or posedge AS_CPU_n) begin
-
-    if (AS_CPU_n) begin
-
-        fast_dtack_n <= 1'b1;
-
-    end else begin
-
-        fast_dtack_n <= !(BG_68SEC000_n & ram_access) & flash_dtack_n;
-
     end
 end
 
@@ -264,22 +254,26 @@ autoconfig_zii autoconfig(
 );
 
 fastram ramcontrol(
+    .CLKCPU(CLKCPU),
     .A(A[23:21]),
     .JP4(JP4),
     .RW_n(RW_n),
     .UDS_n(UDS_n),
     .LDS_n(LDS_n),
+    .AS_CPU_n(AS_CPU_n),
     .AS_n(as_n),
     .DS_n(ds_n),
     .BASE_RAM(base_ram[7:5]),
     .RAM_CONFIGURED_n(ram_configured_n),
+    .BG_68SEC000_n(BG_68SEC000_n),
     .OE_BANK0_n(OE_BANK0_n),
     .OE_BANK1_n(OE_BANK1_n),
     .WE_BANK0_ODD_n(WE_BANK0_ODD_n),
     .WE_BANK1_ODD_n(WE_BANK1_ODD_n),
     .WE_BANK0_EVEN_n(WE_BANK0_EVEN_n),
     .WE_BANK1_EVEN_n(WE_BANK1_EVEN_n),
-    .RAM_ACCESS(ram_access)
+    .RAM_ACCESS(ram_access),
+    .DTACK_n(ram_dtack_n)
 );
 
 sdio sdcontrol(

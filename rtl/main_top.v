@@ -51,7 +51,15 @@ module main_top(
     inout BG_n,
     inout E,
     inout AS_MB_n,
-    inout [15:0] D
+    inout [15:0] D,
+
+    output INT2_n,
+
+    output SD_SS_n,
+    output SD_SCLK,
+    output SD_MOSI,
+    input SD_MISO,
+    input SD_CD_n
 );
 
 /*
@@ -86,22 +94,30 @@ localparam cnt_max_value = 32'd100000000;
 wire ds_n = LDS_n & UDS_n;      // Data Strobe
 wire [7:5] base_ram;            // base address for the RAM_CARD in Z2-space. (A23-A21)
 wire [7:0] base_ide;            // base address for the IDE_CARD in Z2-space. (A23-A16)
+wire [7:0] base_sd;             // base address for the SD_CARD in Z2-space. (A23-A16)
 
 wire ram_configured_n;          // keeps track if RAM_CARD is autoconfigured ok.
 wire ram_access;                // keeps track if local SRAM is being accessed.
 wire ide_configured_n;          // keeps track if IDE_CARD is autoconfigured ok.
 wire ide_access;                // keeps track if the IDE is being accessed.
+wire sd_configured_n;           // keeps track if SDs_CARD is autoconfigured ok.
+wire sd_access;                 // keeps track if the sd is being accessed.
 wire flash_access;              // keeps track if the Flash is being accessed.
+wire sdcard_access;
 
-wire as_internal = AS_CPU_n || ram_access || ide_access || flash_access;
+wire ide_rom_oe_n;
+wire sd_rom_oe_n;
+
+wire as_internal = AS_CPU_n || ram_access || ide_access || flash_access || sdcard_access;
 wire as_n = dma_n ? AS_CPU_n : AS_MB_n;
 wire mb_dtack_n = cpu_speed_switch ? DTACK_MB_n : dtack_mobo_n;
 wire m6800_dtack_n;
 wire ide_dtack_n;
 wire ram_dtack_n;
 wire flash_dtack_n;
+wire sdcard_dtack_n;
 
-assign DTACK_CPU_n = mb_dtack_n & m6800_dtack_n & ide_dtack_n & ram_dtack_n & flash_dtack_n;
+assign DTACK_CPU_n = mb_dtack_n & m6800_dtack_n & ide_dtack_n & ram_dtack_n & flash_dtack_n & sdcard_dtack_n;
 
 assign BR_n = bus_req_n ? 1'b0 : 1'bZ;
 assign BR_68SEC000_n = br2_n ? BR_n & BGACK_n : 1'bZ;
@@ -110,7 +126,7 @@ assign AS_MB_n = dma_n ? cpu_speed_switch ? as_internal : as_internal_fast : 1'b
 
 
 assign ROM_B1 = JP8;
-assign ROM_B2 = rom_pin2;
+assign ROM_B2 = sdcard_access;
 assign ROM_WE_n = rom_pin31;
 
 //Set the CPU speed switch after the PLL generated clocks have stabilized, we boot on 7 MHz...
@@ -220,6 +236,10 @@ m6800 m6800_bus(
     .M6800_DTACK_n(m6800_dtack_n)
 );
 
+wire [15:0] ac_data_in = D;
+wire [15:0] ac_data_out;
+wire ac_data_oe;
+
 autoconfig_zii autoconfig(
     .C7M(C7M),
     .CFGIN_n(CFGIN_n),
@@ -231,11 +251,15 @@ autoconfig_zii autoconfig(
     .RW_n(RW_n),
     .A_HIGH(A[23:16]),
     .A_LOW(A[6:1]),
-    .D_HIGH_NYBBLE(D[15:12]),
+    .data_in(ac_data_in),
+    .data_out(ac_data_out),
+    .data_oe(ac_data_oe),
     .BASE_RAM(base_ram[7:5]),
     .BASE_IDE(base_ide[7:0]),
+    .BASE_SD(base_sd[7:0]),
     .RAM_CONFIGURED_n(ram_configured_n),
     .IDE_CONFIGURED_n(ide_configured_n),
+    .SD_CONFIGURED_n(sd_configured_n),
     .CFGOUT_n(CFGOUT_n)
 );
 
@@ -275,7 +299,7 @@ ata idecontrol(
     .JP3(JP3),
     .JP4(JP4),
     .CPU_SPEED_SWITCH(cpu_speed_switch),
-    .ROM_OE_n(ROM_OE_n),
+    .ROM_OE_n(ide_rom_oe_n),
     .IDE_IOR_n(IDE_IOR_n),
     .IDE_IOW_n(IDE_IOW_n),
     .IDE_CS_n(IDE_CS_n[1:0]),
@@ -303,5 +327,43 @@ flash romoverlay(
     .FLASH_WE_n(FLASH_WE_n),
     .DTACK_n(flash_dtack_n)
 );
+
+wire [15:0] sd_data_in = D;
+wire [15:0] sd_data_out;
+wire sd_data_oe;
+
+assign sdcard_access = !AS_CPU_n && A[23:16] == base_sd && sd_configured_n == 0;
+
+sdcard sdcard_inst(
+    .C100M(OSC_CLK_X1),
+    .CLKCPU(CLKCPU),
+    .RESET_n(RESET_n),
+
+    .ADDR(A),
+    .access(sdcard_access),
+    .RW(RW_n),
+    .UDS_n(UDS_n),
+    .LDS_n(LDS_n),
+
+    .dtack_n(sdcard_dtack_n),
+
+    .data_in(sd_data_in),
+    .data_out(sd_data_out),
+    .data_oe(sd_data_oe),
+    .ROM_OE_n(sd_rom_oe_n),
+    .INT2_n(INT2_n),
+
+    .SS_n(SD_SS_n),
+    .SCLK(SD_SCLK),
+    .MOSI(SD_MOSI),
+    .MISO(SD_MISO),
+    .CD_n(SD_CD_n)
+);
+
+assign ROM_OE_n = ide_rom_oe_n && sd_rom_oe_n;
+
+wire [15:0] data_out = ac_data_oe ? ac_data_out : sd_data_out;
+wire data_oe = ac_data_oe || sd_data_oe;
+assign D = data_oe ? data_out : 16'bz;
 
 endmodule

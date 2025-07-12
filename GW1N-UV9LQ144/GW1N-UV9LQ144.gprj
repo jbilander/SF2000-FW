@@ -10,6 +10,7 @@
         <File path="../rtl/clk_mux.v" type="file.verilog" enable="1"/>
         <File path="../rtl/clock.v" type="file.verilog" enable="1"/>
         <File path="../rtl/fastram.v" type="file.verilog" enable="1"/>
+        <File path="../rtl/fifo.v" type="file.verilog" enable="1"/>
         <File path="../rtl/flash.v" type="file.verilog" enable="1"/>
         <File path="../rtl/gowin_clkdiv_100M_to_28M.v" type="file.verilog" enable="1"/>
         <File path="../rtl/gowin_dcs.v" type="file.verilog" enable="1"/>
@@ -17,7 +18,12 @@
         <File path="../rtl/gowin_rpll_6x.v" type="file.verilog" enable="1"/>
         <File path="../rtl/m6800.v" type="file.verilog" enable="1"/>
         <File path="../rtl/main_top.v" type="file.verilog" enable="1"/>
+        <File path="../rtl/rx_cpu_buf.v" type="file.verilog" enable="1"/>
+        <File path="../rtl/sdcard.v" type="file.verilog" enable="1"/>
+        <File path="../rtl/shifter.v" type="file.verilog" enable="1"/>
         <File path="../rtl/testbench.v" type="file.verilog" enable="0"/>
+        <File path="../rtl/tx_cpu_buf.v" type="file.verilog" enable="1"/>
         <File path="../GW1N-UV9LQ144.cst" type="file.cst" enable="1"/>
+        <File path="../sf2000.sdc" type="file.sdc" enable="1"/>
     </FileList>
 </Project>

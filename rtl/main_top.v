@@ -265,7 +265,6 @@ fastram ramcontrol(
     .DS_n(ds_n),
     .BASE_RAM(base_ram[7:5]),
     .RAM_CONFIGURED_n(ram_configured_n),
-    .BG_68SEC000_n(BG_68SEC000_n),
     .OE_BANK0_n(OE_BANK0_n),
     .OE_BANK1_n(OE_BANK1_n),
     .WE_BANK0_ODD_n(WE_BANK0_ODD_n),

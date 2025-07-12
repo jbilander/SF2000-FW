@@ -12,7 +12,6 @@ module fastram(
     input wire DS_n,
     input wire [7:5] BASE_RAM,
     input wire RAM_CONFIGURED_n,
-    input wire BG_68SEC000_n,
     output wire OE_BANK0_n,
     output wire OE_BANK1_n,
     output wire WE_BANK0_ODD_n,
@@ -55,7 +54,7 @@ always @(posedge CLKCPU or posedge AS_CPU_n) begin
 
     end else begin
 
-        DTACK_n <= !(BG_68SEC000_n & RAM_ACCESS);
+        DTACK_n <= !RAM_ACCESS;
 
     end
 end

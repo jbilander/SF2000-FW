@@ -42,7 +42,6 @@ assign SD_CONFIGURED_n = configured_n[SD_CARD];
 
 assign CFGOUT_n = |config_out_n;
 assign DATA_OE = autoconfig_access && RW_n && !DS_n;
-//assign D_OE  = autoconfig_access && RW_n && !DS_n ? 4'hF : 4'h0;
 
 always @(negedge RESET_n or posedge C7M or posedge AS_CPU_n) begin
 

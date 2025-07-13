@@ -78,6 +78,7 @@ reg mobo_as_n = 1'b1;
 reg cpu_speed_switch = JP1 ? 1'b1 : 1'b0;
 reg switch_state = JP1 ? 1'b1 : 1'b0;
 reg turbo_clk;
+reg sd_enabled;
 
 wire C100M = pll_inst1_CLKOUT1;
 wire C7M = ~C7M_n;
@@ -103,8 +104,10 @@ wire sd_configured_n;       // keeps track if SD_CARD is autoconfigured ok.
 wire sdcard_access;         // keeps track if the SD card is being accessed.
 wire flash_access;          // keeps track if the Flash is being accessed.
 
+assign sdcard_access = !sd_configured_n && (A[23:16] == base_sd) && !AS_CPU_n;
+
 assign D_OUT = ac_data_oe ? {ac_data_out, 12'd0} : sd_data_out;
-assign D_OE = ac_data_oe | sd_data_oe ? 16'hFFFF : 16'd0;
+assign D_OE = ac_data_oe | (sd_data_oe & sd_enabled) ? 16'hFFFF : 16'd0;
 
 wire as_mobo_n = AS_CPU_n | ram_access | flash_access | sdcard_access;
 wire dtack_mobo_n = cpu_speed_switch ? mobo_dtack_n : DTACK_MB_n;
@@ -113,6 +116,27 @@ assign CLKCPU = cpu_speed_switch ? turbo_clk : C7M;
 assign DTACK_CPU_n = dtack_mobo_n & m6800_dtack_n & ram_dtack_n & flash_dtack_n & sdcard_dtack_n;
 assign AS_MB_n_OUT = cpu_speed_switch ? mobo_as_n : as_mobo_n;
 assign AS_MB_n_OE = BG_68SEC000_n;
+
+//Handle access to the Flash ROM (39LF040)
+wire rom_access = sdcard_access && RW_n && !sd_enabled; // ROM enabled before first write
+assign ROM_OE_n = !rom_access;
+
+always @(negedge RESET_n or posedge CLKCPU) begin
+
+    if (!RESET_n) begin
+
+        sd_enabled <= 1'b0;
+
+    end else begin
+
+        if (sdcard_access && !ds_n && !RW_n) begin
+
+            sd_enabled <= 1'b1; // Enable SD interface on first write
+
+        end
+
+    end
+end
 
 parameter DEBOUNCE_LIMIT = 2000000; // 20 ms at 100 MHz
 reg [20:0] count;                   // debounce counter
@@ -292,29 +316,23 @@ fastram ramcontrol(
 
 sdcard sdcontrol(
     .C100M(C100M),
-    .CLKCPU(CLKCPU),
     .RESET_n(RESET_n),
-    .A_HIGH(A[23:16]),
     .ADDR(A[4:1]),
-    .DS_n(ds_n),
-    .RW(RW_n),
-    .AS_CPU_n(AS_CPU_n),
-    .BASE_SD(base_sd[7:0]),
-    .SD_CONFIGURED_n(sd_configured_n),
+    .ACCESS(sdcard_access),
+    .RW_n(RW_n),
     .UDS_n(UDS_n),
     .LDS_n(LDS_n),
+    .DS_n(ds_n),
     .D_IN(D_IN[15:0]),
-    .DATA_OUT(sd_data_out[15:0]),
+    .MISO(SD_MISO),
+    .CD_n(SD_CD_n),
     .DATA_OE(sd_data_oe),
     .INT2_n(INT2_n),
     .SS_n(SD_SS_n),
     .SCLK(SD_SCLK),
     .MOSI(SD_MOSI),
-    .MISO(SD_MISO),
-    .CD_n(SD_CD_n),
-    .ROM_OE_n(ROM_OE_n),
     .DTACK_n(sdcard_dtack_n),
-    .SDCARD_ACCESS(sdcard_access)
+    .DATA_OUT(sd_data_out[15:0])
 );
 
 flash romoverlay(

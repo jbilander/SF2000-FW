@@ -1,28 +1,28 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * SPI SD card controller
+ *
+ * Copyright (C) 2025 Niklas Ekström
+ */
 module sdcard(
     input wire C100M,
-    input wire CLKCPU,
     input wire RESET_n,
-    input wire [23:16] A_HIGH,
     input wire [4:1] ADDR,
-    input wire DS_n,
-    input wire RW,
-    input wire AS_CPU_n,
-    input wire [7:0] BASE_SD,
-    input wire SD_CONFIGURED_n,
+    input wire ACCESS,
+    input wire RW_n,
     input wire UDS_n,
     input wire LDS_n,
+    input wire DS_n,
+    input wire [15:0] D_IN,
     input wire MISO,
     input wire CD_n,
-    input wire [15:0] D_IN,
-    output reg [15:0] DATA_OUT,
     output wire DATA_OE,
     output wire INT2_n,
     output wire SS_n,
     output wire SCLK,
     output wire MOSI,
-    output reg ROM_OE_n,
     output wire DTACK_n,
-    output wire SDCARD_ACCESS
+    output reg [15:0] DATA_OUT
 );
 
 // Register addresses
@@ -35,32 +35,11 @@ localparam ADDR_INTREQ = 5;
 localparam ADDR_INTENA = 6;
 localparam ADDR_INTACT = 7;
 
-assign SDCARD_ACCESS = !SD_CONFIGURED_n && (A_HIGH[23:16] == BASE_SD) && !AS_CPU_n;
-
-wire wr_access = SDCARD_ACCESS && !DS_n && !RW;
-wire rd_access = SDCARD_ACCESS && !DS_n && RW && sd_enabled;
-wire rom_access = SDCARD_ACCESS && RW && !sd_enabled; // ROM enabled before first write
-
-reg sd_enabled = 0;
-
-always @(posedge CLKCPU or negedge RESET_n) begin
-    if (!RESET_n) begin
-        sd_enabled <= 1'b0;
-        ROM_OE_n <= 1'b1;
-    end else begin
-        if (wr_access)
-            sd_enabled <= 1'b1; // Enable SD interface on first write
-
-        if (rom_access) begin
-            ROM_OE_n <= 1'b0;
-        end else begin
-            ROM_OE_n <= 1'b1;
-        end
-    end
-end
+wire wr_access = ACCESS && !DS_n && !RW_n;
+wire rd_access = ACCESS && !DS_n && RW_n;
 
 assign DATA_OE = rd_access;
-assign DTACK_n = !SDCARD_ACCESS;
+assign DTACK_n = !ACCESS;
 
 reg [2:0] reset_sync;
 reg reset_filtered;

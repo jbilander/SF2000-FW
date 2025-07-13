@@ -20,6 +20,8 @@ module main_top(
     input wire VPA_n,
     input wire [2:0] FC,
     input wire DTACK_MB_n,
+    input wire SD_MISO,
+    input wire SD_CD_n,
     input wire BOSS_n_IN,
     input wire BR_n_IN,
     input wire BG_n_IN,
@@ -27,9 +29,9 @@ module main_top(
     input wire BG_68SEC000_n,
     input wire E_IN,
     input wire AS_MB_n_IN,
-    input wire [15:12] D_IN,
-    output wire [15:12] D_OUT,
-    output wire [15:12] D_OE,
+    input wire [15:0] D_IN,
+    output wire [15:0] D_OUT,
+    output wire [15:0] D_OE,
     output wire CFGOUT_n,
     output wire E_OUT,
     output wire CLKCPU,
@@ -47,6 +49,9 @@ module main_top(
     output wire FLASH_A19,
     output wire FLASH_WE_n,
     output wire FLASH_OE_n,
+    output wire SD_SS_n,
+    output wire SD_SCLK,
+    output wire SD_MOSI,
     output reg E_OE,
     output reg BR_68SEC000_n,
     output reg BOSS_n_OUT,
@@ -79,23 +84,33 @@ wire C7M = ~C7M_n;
 wire m6800_dtack_n;
 wire ram_dtack_n;
 wire flash_dtack_n;
+wire sdcard_dtack_n;
+
+wire ac_data_oe;
+wire sd_data_oe;
+wire [15:12] ac_data_out;   // autoconfig data nybble out
+wire [15:0] sd_data_out;
+wire INT2_n;
 
 wire as_n = BG_68SEC000_n ? AS_CPU_n : AS_MB_n_IN;
 wire ds_n = LDS_n & UDS_n;  // Data Strobe
 wire [7:5] base_ram;        // base address for the RAM_CARD in Z2-space. (A23-A21)
-wire [7:0] base_sdio;       // base address for the SDIO_CARD in Z2-space. (A23-A16)
+wire [7:0] base_sd;         // base address for the SDIO_CARD in Z2-space. (A23-A16)
 
 wire ram_configured_n;      // keeps track if RAM_CARD is autoconfigured ok.
 wire ram_access;            // keeps track if local SRAM is being accessed.
-wire sdio_configured_n;     // keeps track if SDIO_CARD is autoconfigured ok.
-wire sdio_access;           // keeps track if the SDIO is being accessed.
+wire sd_configured_n;       // keeps track if SD_CARD is autoconfigured ok.
+wire sdcard_access;         // keeps track if the SD card is being accessed.
 wire flash_access;          // keeps track if the Flash is being accessed.
 
-wire as_mobo_n = AS_CPU_n | ram_access | flash_access;
+assign D_OUT = ac_data_oe ? {ac_data_out, 12'd0} : sd_data_out;
+assign D_OE = ac_data_oe | sd_data_oe ? 16'hFFFF : 16'd0;
+
+wire as_mobo_n = AS_CPU_n | ram_access | flash_access | sdcard_access;
 wire dtack_mobo_n = cpu_speed_switch ? mobo_dtack_n : DTACK_MB_n;
 
 assign CLKCPU = cpu_speed_switch ? turbo_clk : C7M;
-assign DTACK_CPU_n = dtack_mobo_n & m6800_dtack_n & ram_dtack_n & flash_dtack_n;
+assign DTACK_CPU_n = dtack_mobo_n & m6800_dtack_n & ram_dtack_n & flash_dtack_n & sdcard_dtack_n;
 assign AS_MB_n_OUT = cpu_speed_switch ? mobo_as_n : as_mobo_n;
 assign AS_MB_n_OE = BG_68SEC000_n;
 
@@ -244,12 +259,12 @@ autoconfig_zii autoconfig(
     .A_HIGH(A[23:16]),
     .A_LOW(A[6:1]),
     .D_IN(D_IN[15:12]),
-    .D_OUT(D_OUT[15:12]),
-    .D_OE(D_OE[15:12]),
+    .DATA_OUT(ac_data_out[15:12]),
+    .DATA_OE(ac_data_oe),
     .BASE_RAM(base_ram[7:5]),
-    .BASE_SDIO(base_sdio[7:0]),
+    .BASE_SD(base_sd[7:0]),
     .RAM_CONFIGURED_n(ram_configured_n),
-    .SDIO_CONFIGURED_n(sdio_configured_n),
+    .SD_CONFIGURED_n(sd_configured_n),
     .CFGOUT_n(CFGOUT_n)
 );
 
@@ -275,16 +290,31 @@ fastram ramcontrol(
     .DTACK_n(ram_dtack_n)
 );
 
-sdio sdcontrol(
+sdcard sdcontrol(
+    .C100M(C100M),
     .CLKCPU(CLKCPU),
     .RESET_n(RESET_n),
     .A_HIGH(A[23:16]),
-    .RW_n(RW_n),
+    .ADDR(A[4:1]),
+    .DS_n(ds_n),
+    .RW(RW_n),
     .AS_CPU_n(AS_CPU_n),
-    .BASE_SDIO(base_sdio[7:0]),
-    .SDIO_CONFIGURED_n(sdio_configured_n),
+    .BASE_SD(base_sd[7:0]),
+    .SD_CONFIGURED_n(sd_configured_n),
+    .UDS_n(UDS_n),
+    .LDS_n(LDS_n),
+    .D_IN(D_IN[15:0]),
+    .DATA_OUT(sd_data_out[15:0]),
+    .DATA_OE(sd_data_oe),
+    .INT2_n(INT2_n),
+    .SS_n(SD_SS_n),
+    .SCLK(SD_SCLK),
+    .MOSI(SD_MOSI),
+    .MISO(SD_MISO),
+    .CD_n(SD_CD_n),
     .ROM_OE_n(ROM_OE_n),
-    .SDIO_ACCESS(sdio_access)
+    .DTACK_n(sdcard_dtack_n),
+    .SDCARD_ACCESS(sdcard_access)
 );
 
 flash romoverlay(

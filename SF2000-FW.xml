@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<efx:project name="SF2000-FW" description="" last_change="1752301287" sw_version="2024.2.294" last_run_state="pass" last_run_flow="bitstream" config_result_in_sync="true" design_ood="sync" place_ood="sync" route_ood="sync" xmlns:efx="http://www.efinixinc.com/enf_proj" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.efinixinc.com/enf_proj enf_proj.xsd">
+<efx:project name="SF2000-FW" description="" last_change="1752417211" sw_version="2024.2.294" last_run_state="pass" last_run_flow="bitstream" config_result_in_sync="true" design_ood="change" place_ood="sync" route_ood="sync" xmlns:efx="http://www.efinixinc.com/enf_proj" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.efinixinc.com/enf_proj enf_proj.xsd">
     <efx:device_info>
         <efx:family name="Trion"/>
         <efx:device name="T8Q144"/>
@@ -13,6 +13,11 @@
         <efx:design_file name="rtl/fastram.v" version="default" library="default"/>
         <efx:design_file name="rtl/sdio.v" version="default" library="default"/>
         <efx:design_file name="rtl/flash.v" version="default" library="default"/>
+        <efx:design_file name="rtl/sdcard.v" version="default" library="default"/>
+        <efx:design_file name="rtl/tx_cpu_buf.v" version="default" library="default"/>
+        <efx:design_file name="rtl/rx_cpu_buf.v" version="default" library="default"/>
+        <efx:design_file name="rtl/fifo.v" version="default" library="default"/>
+        <efx:design_file name="rtl/shifter.v" version="default" library="default"/>
         <efx:top_vhdl_arch name=""/>
     </efx:design_info>
     <efx:constraint_info>

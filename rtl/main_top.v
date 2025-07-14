@@ -75,7 +75,7 @@ reg bootstrap = 1'b1;
 reg dma_en;
 reg mobo_dtack_n = 1'b1;
 reg mobo_as_n = 1'b1;
-reg cpu_speed_switch = JP1 ? 1'b1 : 1'b0;
+reg cpu_speed_switch;
 reg switch_state = JP1 ? 1'b1 : 1'b0;
 reg turbo_clk;
 reg sd_enabled;
@@ -122,55 +122,57 @@ wire rom_access = sdcard_access && RW_n && !sd_enabled; // ROM enabled before fi
 assign ROM_OE_n = !rom_access;
 
 always @(negedge RESET_n or posedge CLKCPU) begin
-
     if (!RESET_n) begin
-
         sd_enabled <= 1'b0;
-
     end else begin
-
         if (sdcard_access && !ds_n && !RW_n) begin
-
             sd_enabled <= 1'b1; // Enable SD interface on first write
-
         end
-
     end
 end
 
-parameter DEBOUNCE_LIMIT = 2000000; // 20 ms at 100 MHz
-reg [20:0] count;                   // debounce counter
+localparam BOOT_7M_LIMIT = 30'd300000000;   // 3 seconds at 100 MHz
+reg [29:0] b_count;                         // boot on 7 MHz counter
+
+localparam DEBOUNCE_LIMIT = 21'd2000000;    // 20 ms at 100 MHz
+reg [20:0] d_count;                         // debounce d_counter
 
 //Handle cpu speed switch with debounce
 always @(negedge RESET_n or posedge C100M) begin
 
     if (!RESET_n) begin
 
-        count <= 1'b0;
-        cpu_speed_switch <= JP1;
+        d_count <= 1'b0;
+        b_count <= 1'b0;
+        cpu_speed_switch <= 1'b0;
         switch_state <= JP1;
 
     end else begin
 
-        if (switch_state != JP1 && count < DEBOUNCE_LIMIT) begin
+        if (b_count != BOOT_7M_LIMIT) begin
+            b_count <= b_count + 1'b1;
+        end
 
-            count <= count + 1'b1;
+        if (switch_state != JP1 && d_count < DEBOUNCE_LIMIT) begin
 
-        end else if (count == DEBOUNCE_LIMIT) begin
+            d_count <= d_count + 1'b1;
+
+        end else if (d_count == DEBOUNCE_LIMIT) begin
 
             switch_state <= JP1;
-            count <= 1'b0;
+            d_count <= 1'b0;
 
         end else begin
 
-            count <= 1'b0;
+            d_count <= 1'b0;
 
         end
 
         //Wait until bus-cycle has reached (S7) before hot-switching to new cpu speed
         if (AS_CPU_n && DTACK_CPU_n) begin
 
-            cpu_speed_switch <= switch_state;
+            //Set the CPU speed switch after autoconfigure and pll has stabilized, we boot on 7 MHz...
+            cpu_speed_switch <= (b_count == BOOT_7M_LIMIT) ? switch_state : 1'b0;
 
         end
     end

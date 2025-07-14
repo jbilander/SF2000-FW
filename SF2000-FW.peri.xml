@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<efxpt:design_db name="SF2000-FW" device_def="T8Q144" version="2024.2.294" db_version="20242999" last_change_date="Sun Jul 13 21:04:38 2025" xmlns:efxpt="http://www.efinixinc.com/peri_design_db" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.efinixinc.com/peri_design_db peri_design_db.xsd ">
+<efxpt:design_db name="SF2000-FW" device_def="T8Q144" version="2024.2.294" db_version="20242999" last_change_date="Mon Jul 14 08:54:52 2025" xmlns:efxpt="http://www.efinixinc.com/peri_design_db" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.efinixinc.com/peri_design_db peri_design_db.xsd ">
     <efxpt:device_info>
         <efxpt:iobank_info>
             <efxpt:iobank name="1A" iostd="3.3 V LVTTL / LVCMOS"/>
@@ -335,7 +335,7 @@
     </efxpt:gpio_info>
     <efxpt:pll_info>
         <efxpt:pll name="pll_inst1" pll_def="PLL_TR0" ref_clock_name="" ref_clock_freq="20.0000" multiplier="80" pre_divider="1" post_divider="2" reset_name="" locked_name="" is_ipfrz="false" is_bypass_lock="true">
-            <efxpt:output_clock name="pll_inst1_CLKOUT0" number="0" out_divider="10" adv_out_phase_shift="0"/>
+            <efxpt:output_clock name="pll_inst1_CLKOUT0" number="0" out_divider="9" adv_out_phase_shift="0"/>
             <efxpt:output_clock name="pll_inst1_CLKOUT1" number="1" out_divider="8" adv_out_phase_shift="0"/>
             <efxpt:adv_prop ref_clock_mode="external" ref_clock1_name="" ext_ref_clock_id="2" clksel_name="" feedback_clock_name="" feedback_mode="internal"/>
         </efxpt:pll>

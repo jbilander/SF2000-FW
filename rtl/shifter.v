@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * SPI SD card controller
+ *
+ * Copyright (C) 2025 Niklas Ekström
+ */
 module shifter(
     input wire clk,
     input wire reset,

@@ -6,22 +6,25 @@
  */
 module sdcard(
     input wire C100M,
+    input wire CLKCPU,
     input wire RESET_n,
     input wire [4:1] ADDR,
     input wire ACCESS,
     input wire RW_n,
     input wire UDS_n,
     input wire LDS_n,
+    input wire AS_CPU_n,
     input wire DS_n,
     input wire [15:0] D_IN,
     input wire MISO,
     input wire CD_n,
+    input wire CPU_SPEED_SWITCH,
     output wire DATA_OE,
     output wire INT2_n,
     output wire SS_n,
     output wire SCLK,
     output wire MOSI,
-    output wire DTACK_n,
+    output reg DTACK_n = 1'b1,
     output reg [15:0] DATA_OUT
 );
 
@@ -39,7 +42,32 @@ wire wr_access = ACCESS && !DS_n && !RW_n;
 wire rd_access = ACCESS && !DS_n && RW_n;
 
 assign DATA_OE = rd_access;
-assign DTACK_n = !ACCESS;
+
+reg [2:0] delay_counter;
+wire [2:0] delay_cnt = CPU_SPEED_SWITCH ? 3'd3 : 3'd0;
+
+always @(posedge CLKCPU or posedge AS_CPU_n) begin
+
+    if (AS_CPU_n) begin
+        DTACK_n <= 1'b1;
+        delay_counter <= 'd0;
+    end else begin
+
+        if (ACCESS) begin
+            if (delay_counter == delay_cnt) begin
+                DTACK_n <= !ACCESS;
+                delay_counter <= 'd0;
+            end else begin
+                DTACK_n <= 1'b1;
+                delay_counter <= delay_counter + 1'b1;
+            end
+        end else begin
+            DTACK_n <= 1'b1;
+            delay_counter <= 'd0;
+        end
+
+    end
+end
 
 reg [2:0] reset_sync;
 reg reset_filtered;

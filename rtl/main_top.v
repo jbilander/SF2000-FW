@@ -318,13 +318,16 @@ fastram ramcontrol(
 
 sdcard sdcontrol(
     .C100M(C100M),
+    .CLKCPU(CLKCPU),
     .RESET_n(RESET_n),
     .ADDR(A[4:1]),
     .ACCESS(sdcard_access),
     .RW_n(RW_n),
     .UDS_n(UDS_n),
     .LDS_n(LDS_n),
+    .AS_CPU_n(AS_CPU_n),
     .DS_n(ds_n),
+    .CPU_SPEED_SWITCH(cpu_speed_switch),
     .D_IN(D_IN[15:0]),
     .MISO(SD_MISO),
     .CD_n(SD_CD_n),

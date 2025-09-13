@@ -52,6 +52,7 @@ module main_top(
     output wire SD_SS_n,
     output wire SD_SCLK,
     output wire SD_MOSI,
+    output wire INT2_n,
     output reg E_OE,
     output reg BR_68SEC000_n,
     output reg BOSS_n_OUT,
@@ -91,7 +92,6 @@ wire ac_data_oe;
 wire sd_data_oe;
 wire [15:12] ac_data_out;   // autoconfig data nybble out
 wire [15:0] sd_data_out;
-wire INT2_n;
 
 wire as_n = BG_68SEC000_n ? AS_CPU_n : AS_MB_n_IN;
 wire ds_n = LDS_n & UDS_n;  // Data Strobe

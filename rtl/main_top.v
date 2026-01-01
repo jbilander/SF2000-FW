@@ -318,8 +318,10 @@ always @(posedge C7M) begin
         bus_arb_state <= BUS_IDLE;
         BR_68SEC000_n <= 1'b1;
         BG_n_OUT <= 1'b1;
+        BR_n_OUT <= 1'b1;
     end else begin
         if (dma_en) begin
+            BR_n_OUT <= 1'b1;
             case (bus_arb_state)
                 BUS_IDLE: begin
                     BR_68SEC000_n <= 1'b1;

@@ -15,20 +15,21 @@ module m6800(
 );
 
 /*
-Synchronous 6800 Bus Emulation - Phase 2C (2-stage sync)
+Synchronous 6800 Bus Emulation - Phase 2D (1-stage sync)
 
-Reduced from 3-stage to 2-stage synchronizers for faster response.
-This is necessary for time-critical peripherals like floppy disk controller.
+Reduced from 2-stage to 1-stage synchronizers for fastest response.
+This is necessary for fast peripherals like SDBox-v3 when listening to external E.
 
 At 7MHz:
-- 2-stage delay = ~280ns (vs 420ns for 3-stage)
-- Still provides metastability protection
-- Fast enough for floppy disk timing requirements
+- 1-stage delay = ~140ns (vs 280ns for 2-stage)
+- Minimal metastability protection
+- Fast enough for SDBox-v3 and other fast 6800 peripherals
 
 Trade-off:
-- Slightly less metastability protection than 3-stage
-- But at 7MHz, 2 stages is still very safe
-- Critical for floppy disk to work
+- Reduced metastability protection vs 2-stage
+- But E_IN from internal CPU is a slow, clean signal (~709kHz)
+- At 7MHz, even 1 stage provides reasonable protection for such slow signals
+- Critical for SDBox-v3 to work when listening to external E
 */
 
 //=============================================================================
@@ -55,23 +56,26 @@ always @(negedge C7M) begin
 end
 
 //=============================================================================
-// External E Synchronization (2-stage)
+// External E Synchronization (1-stage)
 //=============================================================================
-reg [1:0] e_in_sync;     // Changed from [2:0] to [1:0]
+reg e_in_sync;           // Single stage - just one flip-flop
+reg e_in_prev;           // Previous value for edge detection
 reg [3:0] e_cnt = 4'd0;
 reg e_sync_reset = 1'b0;
 
 always @(negedge C7M) begin
     if (!RESET_n) begin
-        e_in_sync <= 2'b11;  // 2 stages
+        e_in_sync <= 1'b1;
+        e_in_prev <= 1'b1;
         e_cnt <= 4'd0;
         e_sync_reset <= 1'b0;
     end else begin
-        // 2-stage synchronizer for E_IN
-        e_in_sync <= {e_in_sync[0], E_IN};
+        // 1-stage synchronizer for E_IN
+        e_in_prev <= e_in_sync;
+        e_in_sync <= E_IN;
         
         // Detect falling edge (1→0)
-        if (e_in_sync[1:0] == 2'b10) begin
+        if (e_in_prev == 1'b1 && e_in_sync == 1'b0) begin
             e_sync_reset <= 1'b1;
         end
         
@@ -90,35 +94,35 @@ always @(negedge C7M) begin
 end
 
 //=============================================================================
-// VPA_n Synchronization (2-stage)
+// VPA_n Synchronization (1-stage)
 //=============================================================================
-reg [1:0] vpa_n_sync;    // Changed from [2:0] to [1:0]
+reg vpa_n_sync;
 
 always @(negedge C7M) begin
     if (!RESET_n)
-        vpa_n_sync <= 2'b11;
+        vpa_n_sync <= 1'b1;
     else
-        vpa_n_sync <= {vpa_n_sync[0], VPA_n};
+        vpa_n_sync <= VPA_n;
 end
 
-wire vpa_n_s = vpa_n_sync[1];  // Use bit [1] instead of [2]
+wire vpa_n_s = vpa_n_sync;
 
 //=============================================================================
-// AS_CPU_n Synchronization (2-stage)
+// AS_CPU_n Synchronization (1-stage)
 //=============================================================================
-reg [1:0] as_cpu_n_sync; // Changed from [2:0] to [1:0]
+reg as_cpu_n_sync;
 
 always @(negedge C7M) begin
     if (!RESET_n)
-        as_cpu_n_sync <= 2'b11;
+        as_cpu_n_sync <= 1'b1;
     else
-        as_cpu_n_sync <= {as_cpu_n_sync[0], AS_CPU_n};
+        as_cpu_n_sync <= AS_CPU_n;
 end
 
-wire as_cpu_n_s = as_cpu_n_sync[1];  // Use bit [1] instead of [2]
+wire as_cpu_n_s = as_cpu_n_sync;
 
 //=============================================================================
-// VMA_n Logic (same as Phase 2B, just with 2-stage sync)
+// VMA_n Logic (same as Phase 2C, just with 1-stage sync)
 //=============================================================================
 always @(negedge C7M) begin
     if (!RESET_n) begin
@@ -143,7 +147,7 @@ always @(negedge C7M) begin
 end
 
 //=============================================================================
-// M6800_DTACK_n Logic (same as Phase 2B, just with 2-stage sync)
+// M6800_DTACK_n Logic (same as Phase 2C, just with 1-stage sync)
 //=============================================================================
 always @(negedge C7M) begin
     if (!RESET_n) begin
@@ -168,4 +172,3 @@ always @(negedge C7M) begin
 end
 
 endmodule
-

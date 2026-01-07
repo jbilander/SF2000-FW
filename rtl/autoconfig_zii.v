@@ -1,4 +1,5 @@
 `timescale 1ns / 1ps
+`default_nettype none
 
 module autoconfig_zii(
     input wire C7M,
@@ -43,7 +44,7 @@ assign SD_CONFIGURED_n = configured_n[SD_CARD];
 assign CFGOUT_n = |config_out_n;
 assign DATA_OE = autoconfig_access && RW_n && !DS_n;
 
-always @(negedge RESET_n or posedge C7M or posedge AS_CPU_n) begin
+always @(negedge RESET_n or posedge C7M) begin
 
     if (!RESET_n) begin
 

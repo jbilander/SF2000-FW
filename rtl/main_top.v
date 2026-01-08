@@ -58,7 +58,7 @@ m6800 m6800_bus(
     .VPA_n(VPA_n),
     .CPUSPACE(&FC),
     .AS_CPU_n(AS_CPU_n),
-    .E_IN(E_IN),
+    .E_IN(1'b1),
     .E_OUT(E_OUT),
     .VMA_n(VMA_n),
     .M6800_DTACK_n(m6800_dtack_n)

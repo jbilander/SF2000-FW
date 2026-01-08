@@ -5,6 +5,7 @@ module main_top(
     input wire JP2,
     input wire JP4,
     input wire C7M_n,
+    input wire pll_inst1_CLKOUT1,  // 100 MHz from PLL
     input wire RESET_n,
     input wire AS_CPU_n,
     input wire VPA_n,
@@ -24,6 +25,13 @@ module main_top(
     output wire [15:0] D_OUT,
     output wire [15:0] D_OE,
     output wire CFGOUT_n,
+    
+    // SD Card signals
+    input wire SD_MISO,
+    input wire SD_CD_n,
+    output wire SD_SS_n,
+    output wire SD_SCLK,
+    output wire SD_MOSI,
     
     // Bus arbitration signals
     input wire BG_n_IN,
@@ -59,9 +67,11 @@ module main_top(
     output wire E_OE
 );
 
+wire C100M = pll_inst1_CLKOUT1;
 wire C7M = ~C7M_n;
 wire m6800_dtack_n;
 wire ram_dtack_n;
+wire sdcard_dtack_n;
 wire dma_en;
 wire cpu_detected;
 wire is_b2000;
@@ -74,30 +84,51 @@ wire ram_configured_n;
 wire sd_configured_n;
 wire [7:0] base_sd;
 
+// SD card signals
+wire sd_data_oe;
+wire [15:0] sd_data_out;
+reg sd_enabled;
+
 // Fast RAM signals
 wire ram_access;
 
-// Combined signals (matching working firmware)
+// SD card access detection
+wire sdcard_access = !sd_configured_n && (A[23:16] == base_sd) && !AS_CPU_n;
+
+// Combined signals
 wire as_n = BG_68SEC000_n ? AS_CPU_n : AS_MB_n_IN;
 wire ds_n = LDS_n & UDS_n;
 
-// AS control - don't drive AS to motherboard when accessing local RAM
-wire as_mobo_n = AS_CPU_n | ram_access;
+// AS control - don't drive AS to motherboard when accessing local RAM or SD card
+wire as_mobo_n = AS_CPU_n | ram_access | sdcard_access;
 
 assign CLKCPU = C7M;
-assign DTACK_CPU_n = DTACK_MB_n & m6800_dtack_n & ram_dtack_n;
+assign DTACK_CPU_n = DTACK_MB_n & m6800_dtack_n & ram_dtack_n & sdcard_dtack_n;
 assign AS_MB_n_OUT = as_mobo_n;
-assign AS_MB_n_OE = BG_68SEC000_n | !AS_CPU_n;  // Drive AS_MB_n when we have bus OR when a cycle is in progress
+assign AS_MB_n_OE = BG_68SEC000_n | !AS_CPU_n;  // Keep driving until cycle completes
 
-// Data bus (matching working firmware)
-assign D_OUT = ac_data_oe ? {ac_data_out, 12'd0} : 16'd0;
-assign D_OE = ac_data_oe ? 16'hFFFF : 16'd0;
+// Data bus - autoconfig or SD card
+assign D_OUT = ac_data_oe ? {ac_data_out, 12'd0} : sd_data_out;
+assign D_OE = ac_data_oe | (sd_data_oe & sd_enabled) ? 16'hFFFF : 16'd0;
+
+// SD Card Driver ROM Overlay - enable ROM read before SD card is enabled
+wire rom_access = sdcard_access && RW_n && !sd_enabled;
+assign ROM_OE_n = !rom_access;
 
 // Tie unused signals
-assign ROM_OE_n = 1'b1;
 assign FLASH_WE_n = 1'b1;
 assign FLASH_OE_n = 1'b1;
-assign INT2_n = 1'b1;
+
+// SD card enable on first write
+always @(negedge RESET_n or posedge CLKCPU) begin
+    if (!RESET_n) begin
+        sd_enabled <= 1'b0;
+    end else begin
+        if (sdcard_access && !ds_n && !RW_n) begin
+            sd_enabled <= 1'b1;
+        end
+    end
+end
 
 //=============================================================================
 // Bus Arbiter
@@ -195,6 +226,34 @@ fastram ramcontrol(
     .WE_BANK1_EVEN_n(WE_BANK1_EVEN_n),
     .RAM_ACCESS(ram_access),
     .DTACK_n(ram_dtack_n)
+);
+
+//=============================================================================
+// SD Card Controller
+//=============================================================================
+
+sdcard sdcontrol(
+    .C100M(C100M),
+    .CLKCPU(CLKCPU),
+    .RESET_n(RESET_n),
+    .ADDR(A[4:1]),
+    .ACCESS(sdcard_access),
+    .RW_n(RW_n),
+    .UDS_n(UDS_n),
+    .LDS_n(LDS_n),
+    .AS_CPU_n(AS_CPU_n),
+    .DS_n(ds_n),
+    .CPU_SPEED_SWITCH(1'b0),  // Not using turbo mode yet
+    .D_IN(D_IN[15:0]),
+    .MISO(SD_MISO),
+    .CD_n(SD_CD_n),
+    .DATA_OE(sd_data_oe),
+    .INT2_n(INT2_n),
+    .SS_n(SD_SS_n),
+    .SCLK(SD_SCLK),
+    .MOSI(SD_MOSI),
+    .DTACK_n(sdcard_dtack_n),
+    .DATA_OUT(sd_data_out[15:0])
 );
 
 endmodule

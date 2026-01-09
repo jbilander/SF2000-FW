@@ -2,11 +2,13 @@
 `default_nettype none
 
 module main_top(
+    input wire JP1,           // Turbo enable jumper, closed = 7 MHz, open = turbo
     input wire JP2,
     input wire JP3,           // Flash ROM Kickstart overlay enable
     input wire JP4,
-    input wire C7M_n,
+    input wire pll_inst1_CLKOUT0,  // 80 MHz from PLL (for turbo clock)
     input wire pll_inst1_CLKOUT1,  // 100 MHz from PLL
+    input wire C7M_n,
     input wire RESET_n,
     input wire AS_CPU_n,
     input wire VPA_n,
@@ -108,9 +110,112 @@ wire ds_n = LDS_n & UDS_n;
 // AS control - don't drive AS to motherboard when accessing local RAM, SD card, or Flash
 wire as_mobo_n = AS_CPU_n | ram_access | sdcard_access | flash_access;
 
-assign CLKCPU = C7M;
-assign DTACK_CPU_n = DTACK_MB_n & m6800_dtack_n & ram_dtack_n & sdcard_dtack_n & flash_dtack_n;
-assign AS_MB_n_OUT = as_mobo_n;
+//=============================================================================
+// Turbo Mode - Clock Generation (40 MHz from 80 MHz PLL)
+//=============================================================================
+
+reg turbo_clk;
+always @ (posedge pll_inst1_CLKOUT0) begin
+    turbo_clk <= ~turbo_clk;  // Divide by 2: 80 MHz → 40 MHz
+end
+
+//=============================================================================
+// CPU Speed Switch with Debouncing
+//=============================================================================
+
+localparam BOOT_7M_LIMIT = 30'd300000000;   // 3 seconds at 100 MHz
+reg [29:0] b_count;                         // boot on 7 MHz counter
+
+localparam DEBOUNCE_LIMIT = 21'd2000000;    // 20 ms at 100 MHz
+reg [20:0] d_count;                         // debounce counter
+
+reg cpu_speed_switch;
+reg switch_state = JP1 ? 1'b1 : 1'b0;       // Initialize at declaration like old firmware
+
+//Handle cpu speed switch with debounce - EXACTLY like old firmware
+always @(negedge RESET_n or posedge C100M) begin
+
+    if (!RESET_n) begin
+
+        d_count <= 1'b0;
+        b_count <= 1'b0;
+        cpu_speed_switch <= 1'b0;
+        switch_state <= JP1;
+
+    end else begin
+
+        if (b_count != BOOT_7M_LIMIT) begin
+            b_count <= b_count + 1'b1;
+        end
+
+        if (switch_state != JP1 && d_count < DEBOUNCE_LIMIT) begin
+
+            d_count <= d_count + 1'b1;
+
+        end else if (d_count == DEBOUNCE_LIMIT) begin
+
+            switch_state <= JP1;
+            d_count <= 1'b0;
+
+        end else begin
+
+            d_count <= 1'b0;
+
+        end
+
+        //Wait until bus-cycle has reached (S7) before hot-switching to new cpu speed
+        if (AS_CPU_n && DTACK_CPU_n) begin
+
+            //Set the CPU speed switch after autoconfigure and pll has stabilized, we boot on 7 MHz...
+            cpu_speed_switch <= (b_count == BOOT_7M_LIMIT) ? switch_state : 1'b0;
+
+        end
+    end
+end
+
+//=============================================================================
+// Motherboard Synchronization (1-Stage C7M + Async AS_CPU_n Reset)
+//=============================================================================
+
+reg mobo_as_n = 1'b1;
+reg mobo_dtack_n = 1'b1;
+
+always @(negedge RESET_n or posedge C7M or posedge AS_CPU_n) begin
+
+    if (!RESET_n) begin
+
+        mobo_as_n <= 1'b1;
+        mobo_dtack_n <= 1'b1;
+
+    end else begin
+
+        if (AS_CPU_n) begin
+
+            mobo_as_n <= 1'b1;
+            mobo_dtack_n <= 1'b1;
+
+        end else begin
+
+            mobo_as_n <= as_mobo_n;
+            mobo_dtack_n <= DTACK_MB_n;
+
+        end
+    end
+end
+
+//=============================================================================
+// Signal Assignments (with turbo mode support)
+//=============================================================================
+
+// Clock selection (hot-switchable)
+assign CLKCPU = cpu_speed_switch ? turbo_clk : C7M;
+
+// DTACK from motherboard (synchronized when in turbo)
+wire dtack_mobo_n = cpu_speed_switch ? mobo_dtack_n : DTACK_MB_n;
+assign DTACK_CPU_n = dtack_mobo_n & m6800_dtack_n & ram_dtack_n & sdcard_dtack_n & flash_dtack_n;
+
+// AS to motherboard (synchronized when in turbo)
+assign AS_MB_n_OUT = cpu_speed_switch ? mobo_as_n : as_mobo_n;
 assign AS_MB_n_OE = BG_68SEC000_n | !AS_CPU_n;  // Keep driving until cycle completes
 
 // Data bus - autoconfig or SD card
@@ -245,7 +350,7 @@ sdcard sdcontrol(
     .LDS_n(LDS_n),
     .AS_CPU_n(AS_CPU_n),
     .DS_n(ds_n),
-    .CPU_SPEED_SWITCH(1'b0),  // Not using turbo mode yet
+    .CPU_SPEED_SWITCH(cpu_speed_switch),
     .D_IN(D_IN[15:0]),
     .MISO(SD_MISO),
     .CD_n(SD_CD_n),
@@ -270,7 +375,7 @@ flash romoverlay(
     .DS_n(ds_n),
     .RW_n(RW_n),
     .JP3(JP3),
-    .CPU_SPEED_SWITCH(1'b0),  // Not using turbo mode yet
+    .CPU_SPEED_SWITCH(cpu_speed_switch),
     .FLASH_ACCESS(flash_access),
     .FLASH_A19(FLASH_A19),
     .FLASH_WE_n(FLASH_WE_n),

@@ -47,7 +47,7 @@ assign WE_BANK1_ODD_n = second_4MB_access && !RW_n && !LDS_n ? 1'b0 : 1'b1;
 assign WE_BANK0_EVEN_n = first_4MB_access && !RW_n && !UDS_n ? 1'b0 : 1'b1;
 assign WE_BANK1_EVEN_n = second_4MB_access && !RW_n && !UDS_n ? 1'b0 : 1'b1;
 
-always @(posedge CLKCPU) begin
+always @(posedge CLKCPU or posedge AS_CPU_n) begin
 
     if (AS_CPU_n) begin
 

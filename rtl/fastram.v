@@ -3,6 +3,7 @@
 
 module fastram(
     input wire CLKCPU,
+    input wire CPU_SPEED_SWITCH,
     input wire [23:21] A,
     input wire JP4,
     input wire RW_n,
@@ -47,15 +48,27 @@ assign WE_BANK1_ODD_n = second_4MB_access && !RW_n && !LDS_n ? 1'b0 : 1'b1;
 assign WE_BANK0_EVEN_n = first_4MB_access && !RW_n && !UDS_n ? 1'b0 : 1'b1;
 assign WE_BANK1_EVEN_n = second_4MB_access && !RW_n && !UDS_n ? 1'b0 : 1'b1;
 
+reg [2:0] wait_counter;
+wire [2:0] wait_states = CPU_SPEED_SWITCH ? 3'd2 : 3'd0;
+
 always @(posedge CLKCPU or posedge AS_CPU_n) begin
 
     if (AS_CPU_n) begin
-
         DTACK_n <= 1'b1;
-
+        wait_counter <= 3'd0;
     end else begin
 
-        DTACK_n <= !RAM_ACCESS;
+        if (RAM_ACCESS) begin
+            if (wait_counter < wait_states) begin
+                DTACK_n <= 1'b1;
+                wait_counter <= wait_counter + 3'd1;
+            end else begin
+                DTACK_n <= 1'b0;
+            end
+        end else begin
+            DTACK_n <= 1'b1;
+            wait_counter <= 3'd0;
+        end
 
     end
 end

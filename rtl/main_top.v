@@ -315,6 +315,7 @@ autoconfig_zii autoconfig(
 
 fastram ramcontrol(
     .CLKCPU(CLKCPU),
+    .CPU_SPEED_SWITCH(cpu_speed_switch),
     .A(A[23:21]),
     .JP4(JP4),
     .RW_n(RW_n),

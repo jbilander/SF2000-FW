@@ -14,15 +14,30 @@ module fastram(
     input wire DS_n,
     input wire [7:5] BASE_RAM,
     input wire RAM_CONFIGURED_n,
-    output wire OE_BANK0_n,
-    output wire OE_BANK1_n,
-    output wire WE_BANK0_ODD_n,
-    output wire WE_BANK1_ODD_n,
-    output wire WE_BANK0_EVEN_n,
-    output wire WE_BANK1_EVEN_n,
+    output reg OE_BANK0_n = 1'b1,
+    output reg OE_BANK1_n = 1'b1,
+    output reg WE_BANK0_ODD_n = 1'b1,
+    output reg WE_BANK1_ODD_n = 1'b1,
+    output reg WE_BANK0_EVEN_n = 1'b1,
+    output reg WE_BANK1_EVEN_n = 1'b1,
     output wire RAM_ACCESS,
     output reg DTACK_n = 1'b1
 );
+
+/*
+Fast RAM Controller - NEGEDGE WE for Maximum Write Time
+
+This version uses NEGEDGE for WE assertion, giving maximum write pulse width.
+
+Why negedge for writes:
+1. At 40 MHz, cycle = 25ns, half-cycle = 12.5ns
+2. Negedge WE asserts at t=12.5ns into cycle
+3. Posedge DTACK asserts later (after wait states)
+4. Gives WE maximum time before DTACK ends the cycle
+5. Results in longer, more reliable write pulses
+
+OE still uses posedge for reads (less critical).
+*/
 
 /*
 Amiga memory map Z2-space:
@@ -39,21 +54,53 @@ wire second_4MB_access = !AS_n && !RAM_CONFIGURED_n && JP4 && ( (A == (BASE_RAM 
 
 assign RAM_ACCESS = JP4 ? (first_4MB_access || second_4MB_access) : first_4MB_access;
 
-assign OE_BANK0_n = first_4MB_access && RW_n && !DS_n ? 1'b0 : 1'b1;
-assign OE_BANK1_n = second_4MB_access && RW_n && !DS_n ? 1'b0 : 1'b1;
+//=============================================================================
+// OE Signals - Registered on posedge (reads)
+//=============================================================================
 
-assign WE_BANK0_ODD_n = first_4MB_access && !RW_n && !LDS_n ? 1'b0 : 1'b1;
-assign WE_BANK1_ODD_n = second_4MB_access && !RW_n && !LDS_n ? 1'b0 : 1'b1;
+always @(posedge CLKCPU or posedge AS_n) begin
 
-assign WE_BANK0_EVEN_n = first_4MB_access && !RW_n && !UDS_n ? 1'b0 : 1'b1;
-assign WE_BANK1_EVEN_n = second_4MB_access && !RW_n && !UDS_n ? 1'b0 : 1'b1;
+    if (AS_n) begin
+        OE_BANK0_n <= 1'b1;
+        OE_BANK1_n <= 1'b1;
+    end else begin
+        OE_BANK0_n <= !(first_4MB_access && RW_n && !DS_n);
+        OE_BANK1_n <= !(second_4MB_access && RW_n && !DS_n);
+    end
+    
+end
+
+//=============================================================================
+// WE Signals - Registered on NEGEDGE for maximum write time (writes)
+//=============================================================================
+
+always @(negedge CLKCPU or posedge AS_n) begin
+
+    if (AS_n) begin
+        WE_BANK0_ODD_n <= 1'b1;
+        WE_BANK1_ODD_n <= 1'b1;
+        WE_BANK0_EVEN_n <= 1'b1;
+        WE_BANK1_EVEN_n <= 1'b1;
+    end else begin
+        WE_BANK0_ODD_n <= !(first_4MB_access && !RW_n && !LDS_n);
+        WE_BANK1_ODD_n <= !(second_4MB_access && !RW_n && !LDS_n);
+        WE_BANK0_EVEN_n <= !(first_4MB_access && !RW_n && !UDS_n);
+        WE_BANK1_EVEN_n <= !(second_4MB_access && !RW_n && !UDS_n);
+    end
+    
+end
+
+//=============================================================================
+// DTACK Generation - Use AS_n for async reset (DMA-aware!)
+//=============================================================================
 
 reg [2:0] wait_counter;
 wire [2:0] wait_states = CPU_SPEED_SWITCH ? 3'd2 : 3'd0;
 
-always @(posedge CLKCPU or posedge AS_CPU_n) begin
+// Use AS_n for async reset - DMA-aware (works for both CPU and DMA cycles)
+always @(posedge CLKCPU or posedge AS_n) begin
 
-    if (AS_CPU_n) begin
+    if (AS_n) begin
         DTACK_n <= 1'b1;
         wait_counter <= 3'd0;
     end else begin

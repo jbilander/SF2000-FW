@@ -14,29 +14,28 @@ module fastram(
     input wire DS_n,
     input wire [7:5] BASE_RAM,
     input wire RAM_CONFIGURED_n,
-    output reg OE_BANK0_n = 1'b1,
-    output reg OE_BANK1_n = 1'b1,
-    output reg WE_BANK0_ODD_n = 1'b1,
-    output reg WE_BANK1_ODD_n = 1'b1,
-    output reg WE_BANK0_EVEN_n = 1'b1,
-    output reg WE_BANK1_EVEN_n = 1'b1,
+    output wire OE_BANK0_n,
+    output wire OE_BANK1_n,
+    output wire WE_BANK0_ODD_n,
+    output wire WE_BANK1_ODD_n,
+    output wire WE_BANK0_EVEN_n,
+    output wire WE_BANK1_EVEN_n,
     output wire RAM_ACCESS,
     output reg DTACK_n = 1'b1
 );
 
 /*
-Fast RAM Controller - NEGEDGE WE for Maximum Write Time
+Fast RAM Controller - Conditional Registered OE/WE
 
-This version uses NEGEDGE for WE assertion, giving maximum write pulse width.
+KEY INSIGHT:
+- At 7 MHz: Combinatorial OE/WE works fine (always worked!)
+- At turbo: Need registered OE/WE for longer write pulses (stable writes)
 
-Why negedge for writes:
-1. At 40 MHz, cycle = 25ns, half-cycle = 12.5ns
-2. Negedge WE asserts at t=12.5ns into cycle
-3. Posedge DTACK asserts later (after wait states)
-4. Gives WE maximum time before DTACK ends the cycle
-5. Results in longer, more reliable write pulses
+Solution: Use registered OE/WE only at turbo speeds!
 
-OE still uses posedge for reads (less critical).
+This way:
+- 7 MHz: Fast, combinatorial (DMA/HCII+8 works) ✅
+- Turbo: Registered negedge WE (stable, reliable writes) ✅
 */
 
 /*
@@ -55,52 +54,78 @@ wire second_4MB_access = !AS_n && !RAM_CONFIGURED_n && JP4 && ( (A == (BASE_RAM 
 assign RAM_ACCESS = JP4 ? (first_4MB_access || second_4MB_access) : first_4MB_access;
 
 //=============================================================================
-// OE Signals - Registered on posedge (reads)
+// Registered OE/WE Signals (for turbo mode)
 //=============================================================================
 
+reg OE_BANK0_n_reg = 1'b1;
+reg OE_BANK1_n_reg = 1'b1;
+reg WE_BANK0_ODD_n_reg = 1'b1;
+reg WE_BANK1_ODD_n_reg = 1'b1;
+reg WE_BANK0_EVEN_n_reg = 1'b1;
+reg WE_BANK1_EVEN_n_reg = 1'b1;
+
+// OE registered on posedge
 always @(posedge CLKCPU or posedge AS_n) begin
-
     if (AS_n) begin
-        OE_BANK0_n <= 1'b1;
-        OE_BANK1_n <= 1'b1;
+        OE_BANK0_n_reg <= 1'b1;
+        OE_BANK1_n_reg <= 1'b1;
     end else begin
-        OE_BANK0_n <= !(first_4MB_access && RW_n && !DS_n);
-        OE_BANK1_n <= !(second_4MB_access && RW_n && !DS_n);
+        OE_BANK0_n_reg <= !(first_4MB_access && RW_n && !DS_n);
+        OE_BANK1_n_reg <= !(second_4MB_access && RW_n && !DS_n);
     end
-    
 end
 
-//=============================================================================
-// WE Signals - Registered on NEGEDGE for maximum write time (writes)
-//=============================================================================
-
+// WE registered on negedge (for maximum write time)
 always @(negedge CLKCPU or posedge AS_n) begin
-
     if (AS_n) begin
-        WE_BANK0_ODD_n <= 1'b1;
-        WE_BANK1_ODD_n <= 1'b1;
-        WE_BANK0_EVEN_n <= 1'b1;
-        WE_BANK1_EVEN_n <= 1'b1;
+        WE_BANK0_ODD_n_reg <= 1'b1;
+        WE_BANK1_ODD_n_reg <= 1'b1;
+        WE_BANK0_EVEN_n_reg <= 1'b1;
+        WE_BANK1_EVEN_n_reg <= 1'b1;
     end else begin
-        WE_BANK0_ODD_n <= !(first_4MB_access && !RW_n && !LDS_n);
-        WE_BANK1_ODD_n <= !(second_4MB_access && !RW_n && !LDS_n);
-        WE_BANK0_EVEN_n <= !(first_4MB_access && !RW_n && !UDS_n);
-        WE_BANK1_EVEN_n <= !(second_4MB_access && !RW_n && !UDS_n);
+        WE_BANK0_ODD_n_reg <= !(first_4MB_access && !RW_n && !LDS_n);
+        WE_BANK1_ODD_n_reg <= !(second_4MB_access && !RW_n && !LDS_n);
+        WE_BANK0_EVEN_n_reg <= !(first_4MB_access && !RW_n && !UDS_n);
+        WE_BANK1_EVEN_n_reg <= !(second_4MB_access && !RW_n && !UDS_n);
     end
-    
 end
 
 //=============================================================================
-// DTACK Generation - Use AS_n for async reset (DMA-aware!)
+// Combinatorial OE/WE Signals (for 7 MHz mode)
+//=============================================================================
+
+wire OE_BANK0_n_comb = first_4MB_access && RW_n && !DS_n ? 1'b0 : 1'b1;
+wire OE_BANK1_n_comb = second_4MB_access && RW_n && !DS_n ? 1'b0 : 1'b1;
+
+wire WE_BANK0_ODD_n_comb = first_4MB_access && !RW_n && !LDS_n ? 1'b0 : 1'b1;
+wire WE_BANK1_ODD_n_comb = second_4MB_access && !RW_n && !LDS_n ? 1'b0 : 1'b1;
+
+wire WE_BANK0_EVEN_n_comb = first_4MB_access && !RW_n && !UDS_n ? 1'b0 : 1'b1;
+wire WE_BANK1_EVEN_n_comb = second_4MB_access && !RW_n && !UDS_n ? 1'b0 : 1'b1;
+
+//=============================================================================
+// Output Mux: Registered at turbo, Combinatorial at 7 MHz
+//=============================================================================
+
+assign OE_BANK0_n = CPU_SPEED_SWITCH ? OE_BANK0_n_reg : OE_BANK0_n_comb;
+assign OE_BANK1_n = CPU_SPEED_SWITCH ? OE_BANK1_n_reg : OE_BANK1_n_comb;
+
+assign WE_BANK0_ODD_n = CPU_SPEED_SWITCH ? WE_BANK0_ODD_n_reg : WE_BANK0_ODD_n_comb;
+assign WE_BANK1_ODD_n = CPU_SPEED_SWITCH ? WE_BANK1_ODD_n_reg : WE_BANK1_ODD_n_comb;
+
+assign WE_BANK0_EVEN_n = CPU_SPEED_SWITCH ? WE_BANK0_EVEN_n_reg : WE_BANK0_EVEN_n_comb;
+assign WE_BANK1_EVEN_n = CPU_SPEED_SWITCH ? WE_BANK1_EVEN_n_reg : WE_BANK1_EVEN_n_comb;
+
+//=============================================================================
+// DTACK Generation
 //=============================================================================
 
 reg [2:0] wait_counter;
-wire [2:0] wait_states = CPU_SPEED_SWITCH ? 3'd2 : 3'd0;
+wire [2:0] wait_states = CPU_SPEED_SWITCH ? 3'd0 : 3'd0;
 
-// Use AS_n for async reset - DMA-aware (works for both CPU and DMA cycles)
-always @(posedge CLKCPU or posedge AS_n) begin
+always @(posedge CLKCPU or posedge AS_CPU_n) begin
 
-    if (AS_n) begin
+    if (AS_CPU_n) begin
         DTACK_n <= 1'b1;
         wait_counter <= 3'd0;
     end else begin

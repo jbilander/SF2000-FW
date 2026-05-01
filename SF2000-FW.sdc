@@ -3,10 +3,10 @@
 #################
 create_clock -period 140.00 C7M_n
 
-# turbo_clk (25 MHz): PLL 100 MHz / 4, drives CLKCPU in turbo mode.
+# turbo_clk (40 MHz): PLL 80 MHz / 2, drives CLKCPU in turbo mode.
 # Using create_clock because Efinity cannot trace create_generated_clock
 # through the global clock buffer from the PLL output to this FF.
-create_clock -period 40.00 -name turbo_clk [get_pins {turbo_clk~FF|Q}]
+create_clock -period 25.00 -name turbo_clk [get_pins {turbo_clk~FF|Q}]
 
 # CDC: Three asynchronous clock domains.
 # All cross-domain paths use 2-stage synchronizers — no timing analysis needed.

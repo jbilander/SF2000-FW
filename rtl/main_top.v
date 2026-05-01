@@ -6,8 +6,8 @@ module main_top(
     input wire JP2,
     input wire JP3,           // Flash ROM Kickstart overlay enable
     input wire JP4,
-    input wire pll_inst1_CLKOUT0,  // 80 MHz from PLL (unused)
-    input wire pll_inst1_CLKOUT1,  // 100 MHz from PLL (turbo clock + C100M)
+    input wire pll_inst1_CLKOUT0,  // 80 MHz from PLL (turbo clock source, /2 → 40 MHz)
+    input wire pll_inst1_CLKOUT1,  // 100 MHz from PLL (C100M)
     input wire C7M_n,
     input wire RESET_n,
     input wire AS_CPU_n,
@@ -134,20 +134,17 @@ wire as_mobo_n = AS_CPU_n | ram_access | sdcard_access | flash_access;
 // These parameters control expansion bus timing in turbo mode.
 // Adjust these values for hardware tuning without changing logic.
 
-localparam [3:0] PRECHARGE_TICKS = 4'd7;         // Minimum gap between bus cycles (25MHz ticks, 280ns)
-localparam [2:0] SETUP_TICKS = 3'd3;             // Minimum address setup time (25MHz ticks, 120ns)
+localparam [3:0] PRECHARGE_TICKS = 4'd11;        // Minimum gap between bus cycles (40MHz ticks, 275ns)
+localparam [2:0] SETUP_TICKS = 3'd5;             // Minimum address setup time (40MHz ticks, 125ns)
 localparam [3:0] EXPANSION_DTACK_TICKS = 4'd12;  // Consecutive C100M samples of DTACK LOW before asserting (120ns)
 
 //=============================================================================
-// Turbo Mode - Clock Generation (25 MHz from 100 MHz PLL)
+// Turbo Mode - Clock Generation (40 MHz from 80 MHz PLL)
 //=============================================================================
 
-reg turbo_clk_pre;
 reg turbo_clk;
-always @ (posedge pll_inst1_CLKOUT1) begin
-    turbo_clk_pre <= ~turbo_clk_pre;  // 100 MHz → 50 MHz intermediate
-    if (turbo_clk_pre)
-        turbo_clk <= ~turbo_clk;      // 50 MHz → 25 MHz
+always @ (posedge pll_inst1_CLKOUT0) begin
+    turbo_clk <= ~turbo_clk;          // 80 MHz → 40 MHz
 end
 
 //=============================================================================

@@ -27,7 +27,7 @@ assign FLASH_ACCESS = A[23:20] == 4'hA     && !maprom_enabled               || /
                       A[23:19] == 5'b11111 &&  maprom_enabled               || // $F80000-FFFFFF
                       A[23:19] == 5'b11100 &&  maprom_enabled;                 // $E00000-E7FFFF
 
-always @(posedge CLKCPU or posedge AS_CPU_n) begin
+always @(posedge CLKCPU) begin
 
     if (AS_CPU_n) begin
         DTACK_n <= 1'b1;

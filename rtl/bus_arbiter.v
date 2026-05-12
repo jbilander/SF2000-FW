@@ -34,18 +34,11 @@ module bus_arbiter(
 );
 
 /*
-Hybrid Bus Arbiter
+Bus Arbiter
 
-Takes KEY working elements from user's proven firmware:
-1. BR_68SEC000_n = 0 at reset (hold 68SEC000!)
-2. Fast bootstrap check (not 100 clocks)
-3. Condition: (BG_n_IN != 0 || JP2 != 0)
-4. BOSS_n_IN HIGH = B2000
-
-Keeps BETTER structure from previous attempt:
-1. Synchronizers for metastability protection
-2. Cleaner state machine
-3. Clear mode separation
+Detects machine type (A2000 vs B2000) and CPU presence at boot.
+Manages 3-way bus arbitration between 68SEC000, internal 68000, and
+external DMA masters. All external signals use 2-stage synchronizers.
 */
 
 //=============================================================================
@@ -197,10 +190,10 @@ always @(posedge C7M) begin
             if (dma_en) begin
                 // Mode 1 or Mode 3: DMA enabled
                 BR_n_OE <= 1'b0;                           // Don't drive BR to internal CPU
-                BR_68SEC000_n <= BR_n_IN & BGACK_n;        // 3-to-2 mapping (your elegant formula!)
-                
+                BR_68SEC000_n <= br_n_in_sync[1] & bgack_sync[1]; // 3-to-2 mapping (synced)
+
                 BG_n_OE <= 1'b1;                           // Drive BG to external DMA
-                BG_n_OUT <= BG_68SEC000_n;                 // Pass through 68SEC000's BG
+                BG_n_OUT <= bg_68sec_sync[1];              // Pass through 68SEC000's BG (synced — CDC from 25MHz)
                 
             end else begin
                 // Mode 2: A500 with CPU, no DMA

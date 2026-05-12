@@ -32,9 +32,9 @@ localparam [7:0]  RAM_PROD_ID = 8'd10;    // 5194/10 - SF2000, Memory Master (4M
 localparam [7:0]  SD_PROD_ID  = 8'd11;    // 5194/11 - SF2000, SD card controller I/O device (64K)
 localparam [15:0] SERIAL      = 16'd0;
 
-reg [1:0] configured_n = 2'b11;
+reg [1:0] configured_n = 2'b11;  // Both unconfigured
 reg [1:0] shutup_n = 2'b11;
-reg [1:0] config_out_n = 2'b11;
+reg [1:0] config_out_n = 2'b11;  // Start with RAM
 
 wire autoconfig_access = !CFGIN_n && CFGOUT_n && (A_HIGH == 8'hE8) && !AS_CPU_n;
 
@@ -44,15 +44,15 @@ assign SD_CONFIGURED_n = configured_n[SD_CARD];
 assign CFGOUT_n = |config_out_n;
 assign DATA_OE = autoconfig_access && RW_n && !DS_n;
 
-always @(negedge RESET_n or posedge C7M) begin
+always @(negedge RESET_n or posedge AS_CPU_n) begin
 
     if (!RESET_n) begin
 
-        config_out_n <= 2'b11;
+        config_out_n <= 2'b11;  // Start with RAM
 
     end else begin
 
-        if (AS_CPU_n) config_out_n <= configured_n & shutup_n;
+        config_out_n <= configured_n & shutup_n;
 
     end
 end
@@ -61,7 +61,7 @@ always @(negedge RESET_n or posedge C7M) begin
 
     if (!RESET_n) begin
 
-        configured_n <= 2'b11;
+        configured_n <= 2'b11;  // Both unconfigured
         shutup_n <= 2'b11;
 
     end else begin
@@ -158,6 +158,5 @@ always @(negedge RESET_n or posedge C7M) begin
         end
     end
 end
-
 
 endmodule

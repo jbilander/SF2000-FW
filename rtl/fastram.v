@@ -3,6 +3,7 @@
 
 module fastram(
     input wire CLKCPU,
+    input wire BGACK_n,
     input wire CPU_SPEED_SWITCH,
     input wire [23:21] A,
     input wire JP4,
@@ -27,15 +28,8 @@ module fastram(
 /*
 Fast RAM Controller - Conditional Registered OE/WE
 
-KEY INSIGHT:
-- At 7 MHz: Combinatorial OE/WE works fine (always worked!)
-- At turbo: Need registered OE/WE for longer write pulses (stable writes)
-
-Solution: Use registered OE/WE only at turbo speeds!
-
-This way:
-- 7 MHz: Fast, combinatorial (DMA/HCII+8 works) ✅
-- Turbo: Registered negedge WE (stable, reliable writes) ✅
+7 MHz: Combinatorial OE/WE (fast, DMA-compatible).
+Turbo: Registered OE/WE on negedge for longer write pulses.
 */
 
 /*
@@ -53,6 +47,22 @@ wire second_4MB_access = !AS_n && !RAM_CONFIGURED_n && JP4 && ( (A == (BASE_RAM 
 
 assign RAM_ACCESS = JP4 ? (first_4MB_access || second_4MB_access) : first_4MB_access;
 
+// Filter address glitches during external DMA.
+// Address transitions can transiently match the SRAM range, causing
+// OE/WE to glitch. Requires 1-clock address stability before enabling.
+reg dma_ram_valid;
+always @(posedge CLKCPU) begin
+    if (AS_n)
+        dma_ram_valid <= 1'b0;
+    else
+        dma_ram_valid <= RAM_ACCESS;
+end
+
+// Gate for combinatorial OE/WE:
+// If DMA (!BGACK_n), requires 1-clock stability to prevent address glitches.
+// If CPU (BGACK_n), bypasses filter for 0-wait-state performance.
+wire safe_to_enable = BGACK_n ? 1'b1 : dma_ram_valid;
+
 //=============================================================================
 // Registered OE/WE Signals (for turbo mode)
 //=============================================================================
@@ -65,7 +75,7 @@ reg WE_BANK0_EVEN_n_reg = 1'b1;
 reg WE_BANK1_EVEN_n_reg = 1'b1;
 
 // OE registered on posedge
-always @(posedge CLKCPU or posedge AS_n) begin
+always @(posedge CLKCPU) begin
     if (AS_n) begin
         OE_BANK0_n_reg <= 1'b1;
         OE_BANK1_n_reg <= 1'b1;
@@ -76,7 +86,7 @@ always @(posedge CLKCPU or posedge AS_n) begin
 end
 
 // WE registered on negedge (for maximum write time)
-always @(negedge CLKCPU or posedge AS_n) begin
+always @(negedge CLKCPU) begin
     if (AS_n) begin
         WE_BANK0_ODD_n_reg <= 1'b1;
         WE_BANK1_ODD_n_reg <= 1'b1;
@@ -94,14 +104,14 @@ end
 // Combinatorial OE/WE Signals (for 7 MHz mode)
 //=============================================================================
 
-wire OE_BANK0_n_comb = first_4MB_access && RW_n && !DS_n ? 1'b0 : 1'b1;
-wire OE_BANK1_n_comb = second_4MB_access && RW_n && !DS_n ? 1'b0 : 1'b1;
+wire OE_BANK0_n_comb = first_4MB_access && safe_to_enable && RW_n && !DS_n ? 1'b0 : 1'b1;
+wire OE_BANK1_n_comb = second_4MB_access && safe_to_enable && RW_n && !DS_n ? 1'b0 : 1'b1;
 
-wire WE_BANK0_ODD_n_comb = first_4MB_access && !RW_n && !LDS_n ? 1'b0 : 1'b1;
-wire WE_BANK1_ODD_n_comb = second_4MB_access && !RW_n && !LDS_n ? 1'b0 : 1'b1;
+wire WE_BANK0_ODD_n_comb = first_4MB_access && safe_to_enable && !RW_n && !LDS_n ? 1'b0 : 1'b1;
+wire WE_BANK1_ODD_n_comb = second_4MB_access && safe_to_enable && !RW_n && !LDS_n ? 1'b0 : 1'b1;
 
-wire WE_BANK0_EVEN_n_comb = first_4MB_access && !RW_n && !UDS_n ? 1'b0 : 1'b1;
-wire WE_BANK1_EVEN_n_comb = second_4MB_access && !RW_n && !UDS_n ? 1'b0 : 1'b1;
+wire WE_BANK0_EVEN_n_comb = first_4MB_access && safe_to_enable && !RW_n && !UDS_n ? 1'b0 : 1'b1;
+wire WE_BANK1_EVEN_n_comb = second_4MB_access && safe_to_enable && !RW_n && !UDS_n ? 1'b0 : 1'b1;
 
 //=============================================================================
 // Output Mux: Registered at turbo, Combinatorial at 7 MHz
@@ -120,20 +130,21 @@ assign WE_BANK1_EVEN_n = CPU_SPEED_SWITCH ? WE_BANK1_EVEN_n_reg : WE_BANK1_EVEN_
 // DTACK Generation
 //=============================================================================
 
-reg [2:0] wait_counter;
-wire [2:0] wait_states = CPU_SPEED_SWITCH ? 3'd0 : 3'd0;
+reg [3:0] wait_counter;
+// DMA: 6 wait states for expansion card stability. CPU: 0 wait states.
+wire [3:0] wait_states = (!BGACK_n) ? 4'd6 : 4'd0;
 
-always @(posedge CLKCPU or posedge AS_CPU_n) begin
+always @(posedge CLKCPU) begin
 
-    if (AS_CPU_n) begin
+    if (AS_n) begin
         DTACK_n <= 1'b1;
-        wait_counter <= 3'd0;
+        wait_counter <= 4'd0;
     end else begin
 
         if (RAM_ACCESS) begin
             if (wait_counter < wait_states) begin
                 DTACK_n <= 1'b1;
-                wait_counter <= wait_counter + 3'd1;
+                wait_counter <= wait_counter + 4'd1;
             end else begin
                 DTACK_n <= 1'b0;
             end

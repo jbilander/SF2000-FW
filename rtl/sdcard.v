@@ -122,6 +122,7 @@ wire [15:0] int_act = int_req & int_ena;
 
 wire any_int_act = |int_act;
 
+// INT2_n driver (Internal use only, not driving pin)
 assign INT2_n = !(any_int_act);
 
 always @(posedge C100M) begin

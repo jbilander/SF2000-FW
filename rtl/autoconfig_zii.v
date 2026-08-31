@@ -1,208 +1,174 @@
-`timescale 1ns / 1ps
+// ============================================================================
+// autoconfig_zii.v  --  Spitfire 2000: Zorro II autoconfig for the RAM board
+//
+// Manufacturer 5194 (0x144A, the shared OAHR ID). Registered at
+// https://oahr.github.io/oahr/ -- product 10 "Spitfire 2000, RAM",
+// product 11 "Spitfire 2000, SD Card".
+//
+// One instance per board. Chain them by feeding one instance's cfgout_n into
+// the next one's cfgin_n and taking the pin from the last: the external
+// CFGOUT then cannot assert until every board has configured, which is what a
+// real backplane does.
+//
+// PROTOCOL NOTES THAT ARE EASY TO GET WRONG
+//
+//  * Nibbles are presented on D15-D12 only, at even byte offsets. Each
+//    logical byte is split: high nibble at offset N, low nibble at N+2.
+//
+//  * Every register is read INVERTED except offsets $00 and $02. That
+//    exception exists so er_Type is recognisable: expansion.library checks
+//    bits 7-6 == 11 for a Zorro II board, which only works if it is true
+//    data. Get this backwards and the board simply never appears.
+//
+//  * The base is latched as a full byte, A23-A16, because a 64 KB I/O board
+//    is only 64 KB aligned -- $E90000 needs the low nibble. This handles both
+//    conventions for how it arrives: a single byte write to $48 carrying both
+//    nibbles in D15-D8, or a write to $4A with the low nibble in D15-D12
+//    followed by $48 with the high nibble. lo_seen picks between them.
+//    Writing $48 is what configures the board either way.
+//
+//  * A write to $4C (ec_ShutUp) means "do not appear at all". CFGOUT is
+//    asserted either way, so the chain continues.
+//
+//  * /RESET clears the configuration, as a real board does. Kickstart runs
+//    RESET early and enumerates afterwards.
+// ============================================================================
 
-module autoconfig_zii(
-    input wire C7M,
-    input wire CFGIN_n,
-    input wire JP4,
-    input wire AS_CPU_n,
-    input wire RESET_n,
-    input wire DS_n,
-    input wire RW_n,
-    input wire [23:16] A_HIGH,
-    input wire [6:1] A_LOW,
-    input wire [15:12] D_IN,
-    output reg [15:12] DATA_OUT = 4'hF,
-    output wire DATA_OE,
-    output reg [7:5] BASE_RAM = 3'd0,
-    output reg [7:0] BASE_SD = 8'd0,
-    output wire RAM_CONFIGURED_n,
-    output wire SD_CONFIGURED_n,
-    output wire CFGOUT_n
+`default_nettype none
+
+module autoconfig_zii #(
+    parameter [15:0] MANUF_ID   = 16'd5194,      // 0x144A
+    parameter  [7:0] PRODUCT_ID = 8'd10,
+    parameter [31:0] SERIAL     = 32'd0,
+    parameter        MEMLIST    = 1'b1,          // ERTF_MEMLIST: add to free list
+    parameter        DIAGVALID  = 1'b0,          // ERTF_DIAGVALID: has a boot ROM
+    parameter [15:0] DIAG_VEC   = 16'h0000       // er_InitDiagVec: offset from the
+)(                                               //   board base to the DiagArea
+    input  wire        clk,
+    input  wire        reset,          // RESET asserted: clear configuration
+    input  wire        cfgin_n,
+    output wire        cfgout_n,
+
+    input  wire  [2:0] size_code,      // 000=8M 001=64K 010=128K .. 110=2M 111=4M
+    input  wire        cyc,            // AS asserted and we own the bus
+    input  wire [23:1] a,
+    input  wire        rw_n,
+    input  wire        uds_n,
+    input  wire [15:0] d_in,
+
+    output wire        sel,            // this cycle is ours: withhold AS_MB
+    output wire        sel_addr,       // same, but decoded from the address only
+    output wire        ack,            // our DTACK to the CPU
+    output wire [15:0] d_out,
+    output wire  [3:0] d_oe_nib,       // D15-D12 only
+
+    output reg         configured,
+    output reg   [7:0] base            // A23-A16 of the configured base
 );
 
-/*
-Zorro II AutoConfig Implementation
+    reg  ac_done   = 1'b0;             // configured or shut up: chain moves on
+    reg  wr_seen   = 1'b0;
+    reg  lo_seen   = 1'b0;             // a $4A write supplied the low nibble
+    reg  ack_r     = 1'b0;
 
-This module implements the Zorro II autoconfiguration protocol for two devices:
-1. RAM_CARD  - Fast RAM (4MB or 8MB based on JP4)
-2. SD_CARD   - SD card controller I/O device (64KB)
+    // A board must not become active PART WAY THROUGH a bus cycle. The chain
+    // here is internal and combinational, so the moment the board ahead of us
+    // sets ac_done its cfgout falls, our cfgin falls, and we would latch the
+    // very same $48 write that just configured it -- both boards landing on
+    // the same base. A real backplane cannot do this because the boards are
+    // physically separate; ours can. So sample activeness only between cycles.
+    reg  armed     = 1'b0;
+    wire ac_active = ~cfgin_n & ~ac_done;
+    wire ac_space  = (a[23:16] == 8'hE8);
 
-The autoconfiguration sequence:
-1. KickStart reads configuration data from $E80000-$E8FFFF
-2. KickStart writes base address to configure the device
-3. Device can be "shut up" if KickStart doesn't want to configure it
-*/
+    always @(posedge clk)
+        if (reset)     armed <= 1'b0;
+        else if (!cyc) armed <= ac_active;
 
-localparam RAM_CARD = 1'b0;
-localparam SD_CARD  = 1'b1;
+    assign sel_addr = armed & ac_active & ac_space;   // no AS: keeps it off
+    assign sel      = cyc & sel_addr;                 // the AS_MB critical path
+    assign cfgout_n = ~ac_done;
 
-localparam CONFIGURING_RAM = 2'b11;
-localparam CONFIGURING_SD  = 2'b10;
+    // ---- register file -----------------------------------------------------
+    // ERT_ZORROII, then MEMLIST, DIAGVALID, CHAINEDCONFIG, then the size code.
+    wire [7:0] er_type = {2'b11, MEMLIST, DIAGVALID, 1'b0, size_code};
 
-localparam [15:0] MFG_ID      = 16'h144A; // 5194    - OAHR (Open Amiga Hardware Repository)
-localparam [7:0]  RAM_PROD_ID = 8'd10;    // 5194/10 - SF2000, Memory Master (4M/8M)
-localparam [7:0]  SD_PROD_ID  = 8'd11;    // 5194/11 - SF2000, SD card controller I/O device (64K)
-localparam [15:0] SERIAL      = 16'd0;
+    wire [5:0] idx = a[6:1];           // byte offset / 2
+    reg  [3:0] nib;
 
-// Configuration state
-reg [1:0] configured_n;
-reg [1:0] shutup_n;
-reg [1:0] config_out_n;
-
-// Synchronize AS_CPU_n to C7M domain
-reg [2:0] as_cpu_n_sync;
-wire as_cpu_n_stable = as_cpu_n_sync[2];
-wire as_asserted = !as_cpu_n_stable;
-wire as_rising = (as_cpu_n_sync[2:1] == 2'b01);
-wire as_falling = (as_cpu_n_sync[2:1] == 2'b10);
-
-// Synchronize DS_n
-reg [2:0] ds_n_sync;
-wire ds_n_stable = ds_n_sync[2];
-wire ds_asserted = !ds_n_stable;
-
-// Autoconfig space access detection
-wire autoconfig_access = !CFGIN_n && CFGOUT_n && (A_HIGH == 8'hE8) && as_asserted;
-wire autoconfig_read = autoconfig_read && RW_n && ds_asserted;
-wire autoconfig_write = autoconfig_access && !RW_n && ds_asserted;
-
-// Output enable for data bus
-assign DATA_OE = autoconfig_access && RW_n && ds_asserted;
-
-// Configuration status outputs
-assign RAM_CONFIGURED_n = configured_n[RAM_CARD];
-assign SD_CONFIGURED_n = configured_n[SD_CARD];
-assign CFGOUT_n = |config_out_n;
-
-// Synchronizers
-always @(posedge C7M) begin
-    if (!RESET_n) begin
-        as_cpu_n_sync <= 3'b111;
-        ds_n_sync <= 3'b111;
-    end else begin
-        as_cpu_n_sync <= {as_cpu_n_sync[1:0], AS_CPU_n};
-        ds_n_sync <= {ds_n_sync[1:0], DS_n};
+    always @* begin
+        case (idx)
+        6'd0:  nib = er_type[7:4];                 // $00 er_Type hi
+        6'd1:  nib = er_type[3:0];                 // $02 er_Type lo
+        6'd2:  nib = PRODUCT_ID[7:4];              // $04 er_Product hi
+        6'd3:  nib = PRODUCT_ID[3:0];              // $06 er_Product lo
+        6'd4:  nib = 4'h0;                         // $08 er_Flags hi
+        6'd5:  nib = 4'h0;                         // $0A er_Flags lo
+        6'd8:  nib = MANUF_ID[15:12];              // $10 er_Manufacturer
+        6'd9:  nib = MANUF_ID[11:8];               // $12
+        6'd10: nib = MANUF_ID[7:4];                // $14
+        6'd11: nib = MANUF_ID[3:0];                // $16
+        6'd12: nib = SERIAL[31:28];                // $18 er_SerialNumber
+        6'd13: nib = SERIAL[27:24];
+        6'd14: nib = SERIAL[23:20];
+        6'd15: nib = SERIAL[19:16];
+        6'd16: nib = SERIAL[15:12];
+        6'd17: nib = SERIAL[11:8];
+        6'd18: nib = SERIAL[7:4];
+        6'd19: nib = SERIAL[3:0];                  // $26
+        6'd20: nib = DIAG_VEC[15:12];              // $28 er_InitDiagVec
+        6'd21: nib = DIAG_VEC[11:8];               // $2A
+        6'd22: nib = DIAG_VEC[7:4];                // $2C
+        6'd23: nib = DIAG_VEC[3:0];                // $2E
+        default: nib = 4'h0;
+        endcase
     end
-end
 
-// CFGOUT control - updates on AS rising edge
-always @(posedge C7M) begin
-    if (!RESET_n) begin
-        config_out_n <= 2'b11;
-    end else begin
-        if (as_rising) begin
-            config_out_n <= configured_n & shutup_n;
-        end
-    end
-end
+    // $00 and $02 true, everything else complemented.
+    wire [3:0] rd_nib = (idx <= 6'd1) ? nib : ~nib;
 
-// Main autoconfiguration state machine
-always @(posedge C7M) begin
-    if (!RESET_n) begin
-        configured_n <= 2'b11;
-        shutup_n <= 2'b11;
-        BASE_RAM <= 3'd0;
-        BASE_SD <= 8'd0;
-        DATA_OUT <= 4'hF;
-    end else begin
-        // Process autoconfig accesses
-        if (autoconfig_access && ds_asserted) begin
-            if (RW_n) begin
-                // AutoConfig Read Sequence
-                // All nibbles except 00,02,40,42 must be inverted
-                
-                case (A_LOW)
-                    // Type and size (er_Type, er_Product, er_Flags, er_Reserved)
-                    6'h00: begin
-                        if (config_out_n == CONFIGURING_RAM) 
-                            DATA_OUT <= 4'b1110;  // (00) 1110 Link into memory free list
-                        if (config_out_n == CONFIGURING_SD)  
-                            DATA_OUT <= 4'b1101;  // (00) 1101 Optional ROM vector valid
-                    end
-                    
-                    6'h01: begin
-                        if (config_out_n == CONFIGURING_RAM) 
-                            DATA_OUT <= JP4 ? 4'b0000 : 4'b0111; // (02) 8 or 4 MB RAM
-                        if (config_out_n == CONFIGURING_SD)  
-                            DATA_OUT <= 4'b0001;                 // (02) 64KB
-                    end
-                    
-                    // Product number
-                    6'h02: begin
-                        if (config_out_n == CONFIGURING_RAM) 
-                            DATA_OUT <= ~RAM_PROD_ID[7:4];
-                        if (config_out_n == CONFIGURING_SD)  
-                            DATA_OUT <= ~SD_PROD_ID[7:4];
-                    end
-                    
-                    6'h03: begin
-                        if (config_out_n == CONFIGURING_RAM) 
-                            DATA_OUT <= ~RAM_PROD_ID[3:0];
-                        if (config_out_n == CONFIGURING_SD)  
-                            DATA_OUT <= ~SD_PROD_ID[3:0];
-                    end
-                    
-                    // Flags and reserved
-                    6'h04: DATA_OUT <= ~4'b1100;  // (08) Can be shut up, prefers 8MB space
-                    6'h05: DATA_OUT <= ~4'b0000;  // (0A) Reserved
-                    
-                    // Manufacturer ID
-                    6'h08: DATA_OUT <= ~MFG_ID[15:12];
-                    6'h09: DATA_OUT <= ~MFG_ID[11:8];
-                    6'h0A: DATA_OUT <= ~MFG_ID[7:4];
-                    6'h0B: DATA_OUT <= ~MFG_ID[3:0];
-                    
-                    // Serial number
-                    6'h10: DATA_OUT <= ~SERIAL[15:12];
-                    6'h11: DATA_OUT <= ~SERIAL[11:8];
-                    6'h12: DATA_OUT <= ~SERIAL[7:4];
-                    6'h13: DATA_OUT <= ~SERIAL[3:0];
-                    
-                    // ROM vector (for SD card only)
-                    6'h17: begin
-                        if (config_out_n == CONFIGURING_SD) 
-                            DATA_OUT <= ~4'b0001;  // (2E) ROM vector low byte
-                    end
-                    
-                    // Interrupt configuration
-                    6'h20: DATA_OUT <= 4'd0;  // (40) No interrupts
-                    6'h21: DATA_OUT <= 4'd0;  // (42) No interrupts
-                    
-                    default: DATA_OUT <= 4'hF;
-                endcase
-                
-            end else begin
-                // AutoConfig Write Sequence
-                // Base address configuration
-                
-                case (A_LOW)
-                    6'h24: begin  // (48) Base address high nibble
-                        if (config_out_n == CONFIGURING_RAM) begin
-                            BASE_RAM[7:5] <= D_IN[15:13];  // A23,A22,A21 (2MB chunks)
-                            configured_n[RAM_CARD] <= 1'b0;
-                        end
-                        if (config_out_n == CONFIGURING_SD) begin
-                            BASE_SD[7:4] <= D_IN;
-                            configured_n[SD_CARD] <= 1'b0;
-                        end
-                    end
-                    
-                    6'h25: begin  // (4A) Base address low nibble (written first for SD)
-                        if (config_out_n == CONFIGURING_SD) begin
-                            BASE_SD[3:0] <= D_IN;
-                        end
-                    end
-                    
-                    6'h26: begin  // (4C) "Shut up" address
-                        if (config_out_n == CONFIGURING_RAM) 
-                            shutup_n[RAM_CARD] <= 1'b0;
-                        if (config_out_n == CONFIGURING_SD) 
-                            shutup_n[SD_CARD] <= 1'b0;
-                    end
-                endcase
+    assign d_out    = {rd_nib, 12'h000};
+    assign d_oe_nib = (sel & rw_n) ? 4'hF : 4'h0;
+
+    // ---- configuration writes ----------------------------------------------
+    // One shot per bus cycle, taken on the first edge where UDS is asserted so
+    // the CPU has driven the data (a 68000 asserts the strobes at S4 on a
+    // write). ack is delayed one clock so the latch is certainly done before
+    // the CPU can end the cycle.
+    always @(posedge clk) begin
+        ack_r <= sel;
+        if (reset) begin
+            configured <= 1'b0;
+            base       <= 8'h00;
+            ac_done    <= 1'b0;
+            wr_seen    <= 1'b0;
+            lo_seen    <= 1'b0;
+        end else if (!cyc) begin
+            wr_seen <= 1'b0;
+        end else if (sel && !rw_n && !uds_n && !wr_seen) begin
+            wr_seen <= 1'b1;
+            case (idx)
+            6'd36: begin                            // $48 ec_BaseAddress
+                base[7:4]  <= d_in[15:12];
+                if (!lo_seen) base[3:0] <= d_in[11:8];
+                configured <= 1'b1;
+                ac_done    <= 1'b1;
             end
+            6'd37: begin                            // $4A low nibble, if used
+                base[3:0] <= d_in[15:12];
+                lo_seen   <= 1'b1;
+            end
+            6'd38: begin                            // $4C ec_ShutUp
+                configured <= 1'b0;
+                ac_done    <= 1'b1;
+            end
+            default: ;
+            endcase
         end
     end
-end
+
+    assign ack = ack_r & sel;          // qualified live so it drops with AS
 
 endmodule
+
+`default_nettype wire

@@ -468,7 +468,19 @@ module main_top #(
 
     // On a RAM read the SRAM drives the bus directly through the FETs; the
     // FPGA drives data only for the autovector and autoconfig nibbles.
-    wire drive = cpu_as & bus_owned;
+    // The FETs are strapped on, so anything we drive here appears on the
+    // motherboard bus too. We cannot stop the SRAM doing that on a fast RAM
+    // read, but we can keep the FPGA's own share of the bus as short and as
+    // narrow as possible.
+    //
+    // Gated on a data strobe rather than on AS. A 68000 asserts AS at S2 and
+    // the strobes at S4, and latches read data at S6, so driving from S2
+    // occupied the bus for two clocks longer than anything needed it -- right
+    // across the window where the previous cycle's driver is still turning off
+    // and the address is settling. A read cycle with neither strobe asserted
+    // transfers nothing, so not driving it is correct by definition.
+    wire [15:0] lanes = {{8{~UDS_n}}, {8{~LDS_n}}};
+    wire        drive = cpu_as & bus_owned & (~UDS_n | ~LDS_n);
     // On a ROM read the SST39LF040 drives D0-D7 itself, so sd_data_oe is
     // qualified with sd_enabled -- that is what keeps the ROM and the FPGA
     // off the same lines.
@@ -479,8 +491,8 @@ module main_top #(
                  :            m68_data;
     assign D_OE  = vec_d       & drive ? 16'h00FF
                  : ac_sel      & drive ? {ac_doe, 12'h000}
-                 : sd_drive    & drive ? 16'hFFFF
-                 : m68_drive_d & drive ? {{8{~UDS_n}}, {8{~LDS_n}}}
+                 : sd_drive    & drive ? lanes
+                 : m68_drive_d & drive ? lanes
                  :                       16'h0000;
 
     // ---- parked -------------------------------------------------------------

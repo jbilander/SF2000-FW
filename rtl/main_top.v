@@ -410,7 +410,13 @@ module main_top #(
     wire dma_cyc = dma_active & ~AS_MB_n_IN;
     wire ram_sel, ram_sel_addr, ram_ack;
 
-    fastram u_fastram (
+    // RAM_WAIT 1 adds a wait state. Zero is comfortable on paper -- 10 ns SRAM
+    // against a 560 ns cycle -- but it is the cheapest experiment available if
+    // a machine shows rare fast RAM errors, so it is exposed here rather than
+    // buried as a default inside the module.
+    fastram #(
+        .RAM_WAIT (0)
+    ) u_fastram (
         .clk             (clk),
         .cyc             (cyc | dma_cyc),
         .a_hi            (A[23:20]),

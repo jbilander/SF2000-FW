@@ -88,6 +88,7 @@ module bus_arbiter #(
     reg  [3:0] st       = ST_SETTLE;
     reg [21:0] cnt      = 22'd0;
     reg  [7:0] dcnt     = 8'd0;    // short timeout for the handover
+    reg  [2:0] brq_cnt  = 3'd0;    // /BR must be held, not glitched
     reg        b2000    = 1'b0;
     reg        bg_seen  = 1'b0;    // a real CPU granted: the socket is populated
     reg        br_a     = 1'b0;
@@ -97,6 +98,17 @@ module bus_arbiter #(
     reg        cpu_off  = 1'b0;    // asking our own 68SEC000 to leave
     reg        owned    = 1'b0;
     reg        rst_hold = 1'b1;
+
+    // A real master holds /BR until it is granted, so require it low for four
+    // consecutive clocks. Cheap insurance: /BR is a wired-OR line with only a
+    // weak pull-up holding it, and on an A500 with the socket empty there is
+    // no 68000 on the other end of it at all. A single glitch must not be able
+    // to hand the bus to a master that is not there.
+    always @(posedge clk)
+        if (br_q) brq_cnt <= 3'd0;
+        else if (brq_cnt != 3'd4) brq_cnt <= brq_cnt + 3'd1;
+
+    wire br_held = (brq_cnt == 3'd4);
 
     always @(posedge clk) begin
         cnt <= cnt + 22'd1;
@@ -141,7 +153,7 @@ module bus_arbiter #(
                 owned <= 1'b0;
                 cnt   <= 22'd0;
                 st    <= ST_LOST;
-            end else if (arbiter && !br_q) begin
+            end else if (arbiter && br_held) begin
                 cpu_off <= 1'b1;            // our CPU leaves first, while we
                 dcnt    <= 8'd0;            // still own the bus so it can finish
                 st      <= ST_DMA_REQ;      // the cycle it is in
@@ -157,12 +169,17 @@ module bus_arbiter #(
             end else
                 dcnt <= dcnt + 8'd1;
 
+        // Waiting for the master to take the bus. Never wait here forever: if
+        // BGACK does not arrive the CPU would sit parked off the bus and the
+        // machine would freeze until a keyboard reset. Time out and take it
+        // back instead.
         ST_DMA_GNT:
             if (!reset_q)      st <= ST_LOST;
             else if (!bgack_q) begin
                 bg_a <= 1'b0;               // a 68000 negates BG once BGACK is seen
                 st   <= ST_DMA_ACT;
-            end else if (br_q) st <= ST_DMA_END;   // master gave up without taking it
+            end else if (br_q || &dcnt) st <= ST_DMA_END;
+            else dcnt <= dcnt + 8'd1;
 
         ST_DMA_ACT:                         // master owns the bus
             if (!reset_q)     st <= ST_LOST;

@@ -23,7 +23,27 @@
 // CPU stalls in wait states rather than running into a bus it does not own.
 // Neither CPU can drive during the window.
 //
-// GRANTING THE BUS TO A ZORRO MASTER. Once we are the CPU, /BR reverses
+// GRANTING THE BUS TO A ZORRO MASTER IS A RELAY, NOT A SEQUENCE. Only /BR and
+// /BG are wired to our 68SEC000 -- two-wire arbitration -- so it cannot see
+// /BGACK for itself. That is exactly why an external /BGACK has to be relayed
+// into its /BR: without it our CPU would come back onto the bus the moment the
+// master dropped /BR, while the master still held the bus via /BGACK. Pass
+// /BR or /BGACK through to its /BR, pass its /BG straight back out, and let
+// the CPU do the rest. Two clocks of synchroniser and nothing else.
+//
+// An earlier state machine here walked BR -> ask our CPU -> wait for BG ->
+// assert BG -> wait for BGACK -> negate BG, and it hung a B2000 with a GVP
+// HC8+ during enumeration. Two reasons it was wrong. It triggered only on /BR,
+// so a master asserting /BGACK without a fresh request got no response and we
+// kept driving the bus against it. And it imposed our idea of the protocol's
+// timing on a master that has its own.
+//
+// The relay also removes the deadlock the state machine existed to avoid.
+// bus_owned only drops when BGACK is actually asserted, and by then our CPU
+// has already finished its cycle and tri-stated -- so DTACK forwarding is
+// still live for the whole time the CPU needs it.
+//
+// Once we are the CPU, /BR reverses
 // direction: it stops being our request and becomes Buster's, or an A2091's.
 // We can only see that if we are not holding it low ourselves, which is why
 // BR is released on a B2000 (BOSS does the job) and on the arbitration
@@ -64,7 +84,12 @@ module bus_arbiter #(
     output wire bus_owned,        // we own the motherboard bus
     output wire dma_active,       // a Zorro master has been handed the bus
     output wire dma_capable,      // BR is free, so we can act as arbiter
-
+    output wire took_bus,         // startup: we hold the motherboard bus
+    output wire running,          // startup: reset released, CPU let go
+    output wire sane,             // /BR and /BGACK seen idle high: relay live
+    output wire relayed,          // an external /BR or /BGACK reached our CPU
+    output wire master_took,      // a master actually took it (/BGACK asserted)
+    output wire cpu_present,      // a socketed CPU answered our request
     // pins, all open drain: drive 0 or release, never drive 1
     output wire reset_n_out,
     output wire reset_n_oe,
@@ -81,34 +106,38 @@ module bus_arbiter #(
 
     localparam ST_SETTLE  = 4'd0,  ST_REQ     = 4'd1,  ST_TAKE   = 4'd2,
                ST_HOLD    = 4'd3,  ST_REL     = 4'd4,  ST_RUN    = 4'd5,
-               ST_LOST    = 4'd6,  ST_REACQ   = 4'd7,
-               ST_DMA_REQ = 4'd8,  ST_DMA_GNT = 4'd9,
-               ST_DMA_ACT = 4'd10, ST_DMA_END = 4'd11;
+               ST_LOST    = 4'd6,  ST_REACQ   = 4'd7;
 
     reg  [3:0] st       = ST_SETTLE;
     reg [21:0] cnt      = 22'd0;
-    reg  [7:0] dcnt     = 8'd0;    // short timeout for the handover
-    reg  [2:0] brq_cnt  = 3'd0;    // /BR must be held, not glitched
     reg        b2000    = 1'b0;
     reg        bg_seen  = 1'b0;    // a real CPU granted: the socket is populated
     reg        br_a     = 1'b0;
     reg        boss_a   = 1'b0;
-    reg        bg_a     = 1'b0;    // granting to a Zorro master
     reg        arbiter  = 1'b0;    // BR is free, BG is ours to drive
-    reg        cpu_off  = 1'b0;    // asking our own 68SEC000 to leave
-    reg        owned    = 1'b0;
+    reg        took     = 1'b0;    // startup done: the bus is ours to hand out
     reg        rst_hold = 1'b1;
+    reg  [3:0] sane_cnt = 4'd0;
+    reg        arb_sane = 1'b0;    // /BR and /BGACK have been seen idle high
 
-    // A real master holds /BR until it is granted, so require it low for four
-    // consecutive clocks. Cheap insurance: /BR is a wired-OR line with only a
-    // weak pull-up holding it, and on an A500 with the socket empty there is
-    // no 68000 on the other end of it at all. A single glitch must not be able
-    // to hand the bus to a master that is not there.
+    // BEFORE TRUSTING /BR AND /BGACK, CHECK THEY ARE ALIVE. Both idle high on
+    // a healthy machine, so a few clocks of both high proves the lines exist
+    // and are pulled up. Until that is proven we keep the bus and run our own
+    // CPU, because the relay hands our CPU's bus away on either line going
+    // low -- and a line that is stuck low, unconnected, or on a machine that
+    // does not drive it would otherwise park the CPU forever with no cycles
+    // at all. Degraded means no DMA; it does not mean a black screen.
+    //
+    // On a healthy board this sets within a few clocks of ST_RUN and nothing
+    // is lost. If DMA never works but the machine boots, one of these two
+    // lines is the thing to put a scope on.
     always @(posedge clk)
-        if (br_q) brq_cnt <= 3'd0;
-        else if (brq_cnt != 3'd4) brq_cnt <= brq_cnt + 3'd1;
+        if (!took || !br_q || !bgack_q) sane_cnt <= 4'd0;
+        else if (sane_cnt != 4'd15)     sane_cnt <= sane_cnt + 4'd1;
 
-    wire br_held = (brq_cnt == 3'd4);
+    always @(posedge clk)
+        if (!reset_q)                arb_sane <= 1'b0;
+        else if (sane_cnt == 4'd15)  arb_sane <= 1'b1;
 
     always @(posedge clk) begin
         cnt <= cnt + 22'd1;
@@ -117,7 +146,18 @@ module bus_arbiter #(
         ST_SETTLE:                          // rails, pull-ups, JP1's ~2 ms RC
             if (cnt >= T_SETTLE[21:0]) begin
                 b2000 <= boss_n_in;         // 4k7 on a B2000 beats our pulldown
-                st    <= ST_REQ;
+                // On a B2000, go straight to BOSS and never touch /CBR. BOSS
+                // is the supported way to become the CPU there: Buster sees
+                // it, asserts /BR to the onboard 68000, that CPU grants and
+                // tri-states, and U303 holds it off via /BGACK afterwards.
+                //
+                // The old path asked for the bus first and sat holding /CBR
+                // for the full 20 ms timeout -- nothing ever answered, so
+                // bg_seen never set anyway -- and only then asserted BOSS.
+                // That left a 30 ms window with Buster part-way through an
+                // arbitration it could not finish, which is the one thing we
+                // did that a normal A2000 accelerator does not.
+                st    <= boss_n_in ? ST_TAKE : ST_REQ;
             end
 
         ST_REQ: begin                       // ask the socketed CPU for the bus
@@ -127,7 +167,7 @@ module bus_arbiter #(
         end
 
         ST_TAKE: begin
-            owned <= 1'b1;
+            took <= 1'b1;
             if (b2000) begin
                 boss_a  <= 1'b1;            // Buster holds the onboard CPU off
                 br_a    <= 1'b0;            // BR now means "someone wants it from us"
@@ -150,47 +190,10 @@ module bus_arbiter #(
 
         ST_RUN:
             if (!reset_q) begin
-                owned <= 1'b0;
+                took <= 1'b0;
                 cnt   <= 22'd0;
                 st    <= ST_LOST;
-            end else if (arbiter && br_held) begin
-                cpu_off <= 1'b1;            // our CPU leaves first, while we
-                dcnt    <= 8'd0;            // still own the bus so it can finish
-                st      <= ST_DMA_REQ;      // the cycle it is in
             end
-
-        ST_DMA_REQ:
-            if (!reset_q)                   st <= ST_LOST;
-            else if (!bg68_q || &dcnt) begin
-                owned <= 1'b0;              // now it is safe to let go
-                bg_a  <= 1'b1;
-                dcnt  <= 8'd0;
-                st    <= ST_DMA_GNT;
-            end else
-                dcnt <= dcnt + 8'd1;
-
-        // Waiting for the master to take the bus. Never wait here forever: if
-        // BGACK does not arrive the CPU would sit parked off the bus and the
-        // machine would freeze until a keyboard reset. Time out and take it
-        // back instead.
-        ST_DMA_GNT:
-            if (!reset_q)      st <= ST_LOST;
-            else if (!bgack_q) begin
-                bg_a <= 1'b0;               // a 68000 negates BG once BGACK is seen
-                st   <= ST_DMA_ACT;
-            end else if (br_q || &dcnt) st <= ST_DMA_END;
-            else dcnt <= dcnt + 8'd1;
-
-        ST_DMA_ACT:                         // master owns the bus
-            if (!reset_q)     st <= ST_LOST;
-            else if (bgack_q) st <= ST_DMA_END;
-
-        ST_DMA_END: begin
-            bg_a    <= 1'b0;
-            cpu_off <= 1'b0;
-            owned   <= 1'b1;
-            st      <= ST_RUN;
-        end
 
         ST_LOST:
             if (reset_q) begin
@@ -200,15 +203,13 @@ module bus_arbiter #(
 
         ST_REACQ:                           // socketed CPU should re-grant at once
             if (!bg_q || cnt >= T_ARB_TO[21:0]) begin
-                owned <= 1'b1;
+                took <= 1'b1;
                 st    <= ST_RUN;
             end
 
         default: st <= ST_SETTLE;
         endcase
     end
-
-    assign bus_owned   = owned;
 
     assign reset_n_out = 1'b0;
     assign reset_n_oe  = rst_hold;
@@ -219,21 +220,43 @@ module bus_arbiter #(
     assign boss_n_out  = 1'b0;
     assign boss_n_oe   = boss_a;
 
-    // BG is a totem-pole output on the 68000 bus, so once we are the arbiter
-    // we drive it high when idle and low when granting. Before takeover it is
-    // an input -- that is how we learn we have been granted.
-    assign bg_n_out    = ~bg_a;
-    assign bg_n_oe     = arbiter;
+    // Straight through from our own CPU's grant, but ONLY when the socket is
+    // empty.
+    //
+    // /BGACK tri-states a 68000's address, data and control outputs -- it does
+    // NOT tri-state /BG, which stays driven on pin 11. So on a B2000 with the
+    // socketed CPU still fitted, BOSS switches that CPU off the bus but it
+    // goes on driving /BG, and Buster reads that line. If we drove it too,
+    // two totem-pole outputs would share one net: invisible while nobody is
+    // requesting, a fight the moment either tries to grant.
+    //
+    // It is also unnecessary. Buster's /BR reaches the socketed CPU's pin 13
+    // as well as us, so that CPU already answers the request itself. Leave it
+    // to do the job, and only drive /BG when there is no CPU there to do it.
+    assign bg_n_out    = bg68_q;
+    assign bg_n_oe     = arbiter & ~bg_seen;
 
-    // Our own CPU is off the bus when we do not own it, or when we are asking
-    // it to leave. Not gated on BG_68SEC000_n in the reset path: during reset
-    // our CPU is tri-stated anyway and may not answer, and waiting for an
-    // answer that never comes would deadlock the re-acquire. In the DMA path
-    // we do wait for the grant, with a timeout.
-    assign br_68sec000_n = owned & ~cpu_off;
+    // Ask our CPU to step off while we do not hold the bus, or while an
+    // external master is either requesting it or already holding it. Watching
+    // BGACK as well as BR is what lets a master that reacquires the bus
+    // without issuing a fresh request still be honoured -- the state machine
+    // this replaced watched only BR and would drive the bus against it.
+    assign br_68sec000_n = took & (arb_sane ? (br_q & bgack_q) : 1'b1);
 
-    assign dma_active  = (st == ST_DMA_GNT) || (st == ST_DMA_ACT);
-    assign dma_capable = arbiter;
+    // A master holds the bus exactly when BGACK is asserted, and everything
+    // the rest of the design keys off follows from that single fact.
+    assign dma_active    = arbiter & arb_sane & ~bgack_q;
+    assign dma_capable   = arbiter;
+    assign bus_owned     = took & (arb_sane ? bgack_q : 1'b1);
+
+    // Status for the diagnostic LED. Efinity will not let another module reach
+    // in for st, and it is right not to.
+    assign took_bus      = took;
+    assign running       = (st == ST_RUN);
+    assign sane          = arb_sane;
+    assign relayed       = took & arb_sane & (~br_q | ~bgack_q);
+    assign master_took   = took & arb_sane & ~bgack_q;
+    assign cpu_present   = boss_a;      // long blink now means "BOSS asserted"
 
 endmodule
 

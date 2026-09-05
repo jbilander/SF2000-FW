@@ -69,6 +69,7 @@ module autoconfig_zii #(
     reg  ac_done   = 1'b0;             // configured or shut up: chain moves on
     reg  wr_seen   = 1'b0;
     reg  lo_seen   = 1'b0;             // a $4A write supplied the low nibble
+    reg  done_out  = 1'b0;             // ac_done, held until the cycle ends
     reg  ack_r     = 1'b0;
 
     // A board must not become active PART WAY THROUGH a bus cycle. The chain
@@ -85,9 +86,25 @@ module autoconfig_zii #(
         if (reset)     armed <= 1'b0;
         else if (!cyc) armed <= ac_active;
 
+    // CFGOUT MUST NOT FALL MID-CYCLE. ac_done sets on the clock edge that sees
+    // the $48 write, while AS is still asserted, so releasing CFGOUT straight
+    // from it hands the next board a CFGIN that arrives part way through that
+    // same write -- and a board without our armed guard will latch it and
+    // configure itself at the same base.
+    //
+    // We found this inside our own chain and fixed it with armed. The same
+    // race exists at the pin, and it matters more here: sitting in the
+    // coprocessor slot our CFGOUT reaches a Zorro board earlier, relative to
+    // the cycle, than a Zorro board's CFGOUT would.
+    //
+    // So publish ac_done only between cycles.
+    always @(posedge clk)
+        if (reset)     done_out <= 1'b0;
+        else if (!cyc) done_out <= ac_done;
+
     assign sel_addr = armed & ac_active & ac_space;   // no AS: keeps it off
     assign sel      = cyc & sel_addr;                 // the AS_MB critical path
-    assign cfgout_n = ~ac_done;
+    assign cfgout_n = ~done_out;
 
     // ---- register file -----------------------------------------------------
     // ERT_ZORROII, then MEMLIST, DIAGVALID, CHAINEDCONFIG, then the size code.

@@ -1,5 +1,13 @@
 // ============================================================================
-// main_top.v  --  Spitfire 2000, milestone 2: socketed CPU stays installed
+// main_top.v  --  Spitfire 2000
+//
+// M1  transparent 7 MHz, socket empty.
+// M2  socketed CPU stays installed; E generation or phase-lock; warm reset.
+// M3  Zorro II autoconfig and 8 MB fast RAM.
+// M4  SD card: second autoconfig board, boot ROM, spisd.device.
+// M5  DMA: a Zorro master can read and write the fast RAM.
+//
+// STILL MISSING: maprom, clockport, turbo.
 //
 // WHAT CHANGED FROM M1 (rev B)
 //
@@ -50,8 +58,6 @@
 // every A21-A1 value exactly once, so the mapping is a bijection even though
 // it is rotated relative to the bus address.
 //
-// STILL MISSING: maprom, clockport, SD. A Zorro DMA master asserting BGACK is
-// not handled -- that is M4.
 // ============================================================================
 
 `default_nettype none
@@ -175,7 +181,8 @@ module main_top #(
     wire bg68_q   = s_bg68[1];
 
     // ---- bus arbitration, reset and machine detection -----------------------
-    wire bus_owned, e_ready, dma_active, dma_capable;
+    wire bus_owned, e_ready, dma_active, dma_capable, arb_took, arb_running;
+    wire arb_sane, arb_relayed, arb_mtook, arb_cpu;
 
     bus_arbiter #(
         .T_SETTLE (T_SETTLE),
@@ -193,6 +200,12 @@ module main_top #(
         .bus_owned     (bus_owned),
         .dma_active    (dma_active),
         .dma_capable   (dma_capable),
+        .took_bus      (arb_took),
+        .running       (arb_running),
+        .sane          (arb_sane),
+        .relayed       (arb_relayed),
+        .master_took   (arb_mtook),
+        .cpu_present   (arb_cpu),
         .reset_n_out   (RESET_n_OUT),
         .reset_n_oe    (RESET_n_OE),
         .hlt_n_out     (HLT_n_OUT),
@@ -392,7 +405,7 @@ module main_top #(
         .CPU_SPEED_SWITCH (1'b0),              // becomes the turbo flag in M5
         .DATA_OE          (sd_data_oe),
         .INT2_n           (sd_int2_n),
-        .SS_n             (SD_SS_n),
+        .SS_n             (),                  // LED in this build
         .SCLK             (SD_SCLK),
         .MOSI             (SD_MOSI),
         .DTACK_n          (sd_dtack_n),
@@ -405,8 +418,10 @@ module main_top #(
     assign INT2_n_OE  = ~sd_int2_n;
 
     // ---- fast RAM -----------------------------------------------------------
-    // A granted master drives AS on the motherboard side and the address
-    // reaches the SRAM through the FETs, so the same decode serves it.
+    // A master drives AS on the motherboard side and the address reaches the
+    // SRAM through the FETs, so the same decode serves it. dma_active is just
+    // "BGACK is asserted", so this follows the master's own cycle directly
+    // rather than any state of ours.
     wire dma_cyc = dma_active & ~AS_MB_n_IN;
     wire ram_sel, ram_sel_addr, ram_ack;
 
@@ -495,12 +510,80 @@ module main_top #(
                  : m68_drive_d & drive ? lanes
                  :                       16'h0000;
 
+    // ---- DIAGNOSTIC LED (temporary) -----------------------------------------
+    // The B2000 + HC8+ hang happens before any code runs, so there is no Guru,
+    // no screen and no serial to read. This blinks the SD LED to say how far
+    // we got. Count the blinks, then a gap, then it repeats:
+    //
+    //   1  we took the bus
+    //   2  reset released, our CPU is running
+    //   3  the RAM board configured
+    //   4  the SD board configured -- CFGOUT asserted, chain handed onward
+    //   5  /BR and /BGACK seen idle high, so the arbitration relay is live
+    //   6  an external /BR or /BGACK was relayed to our CPU
+    //   7  a master actually took the bus (/BGACK asserted)
+    //
+    // Once a master has read or written our fast RAM the LED stops counting
+    // and simply lights whenever that is happening -- solid through a disk
+    // transfer means DMA into our RAM, confirmed at the pins.
+    //
+    // A LONG blink at the end of the sequence means BOSS was asserted, i.e.
+    // we detected a B2000 and took the bus that way. No long blink means an
+    // A500 or Braunschweig, where we take it by holding /BR instead.
+    //
+    // Four means we finished our part and the fault is downstream. Stopping at
+    // four when a DMA card is fitted means /BR or /BGACK is not idling high --
+    // so we never relay, and that card waits for a grant that never comes.
+    //
+    // Drives the SD LED, so nothing has to be wired or reconfigured to read
+    // it. The SD CARD DOES NOT WORK IN THIS BUILD -- SD_SS_n is the LED line.
+    // The driver still loads and simply finds no card, which is a path the
+    // machine already handles.
+    //
+    // DELETE THIS BLOCK and restore SD_SS_n to u_sdcard when done.
+    // Ground truth for "is the GVP really DMAing into OUR fast RAM?". This is
+    // a master holding the bus via BGACK and addressing our SRAM -- it cannot
+    // be the CPU bouncing through chip RAM, because then we are not in a DMA
+    // cycle at all. Once seen, the LED stops reporting stages and follows DMA
+    // activity instead, stretched to ~150 ms so the eye can see it.
+    reg [19:0] dma_str  = 20'd0;
+    reg        dma_ever = 1'b0;
+    always @(posedge clk)
+        if (dma_cyc & ram_sel) begin dma_str <= {20{1'b1}}; dma_ever <= 1'b1; end
+        else if (|dma_str)          dma_str <= dma_str - 20'd1;
+
+    reg [26:0] dled = 27'd0;
+    reg  [2:0] dstage = 3'd0;
+    always @(posedge clk) begin
+        dled <= dled + 27'd1;
+        if      (arb_mtook)      dstage <= 3'd7;
+        else if (arb_relayed)    dstage <= 3'd6;
+        else if (arb_sane &&
+                 acs_configured) dstage <= 3'd5;
+        else if (acs_configured) dstage <= 3'd4;
+        else if (acr_configured) dstage <= 3'd3;
+        else if (arb_running)    dstage <= 3'd2;
+        else if (arb_took)       dstage <= 3'd1;
+    end
+    // Short blinks count the stage; one long blink after them if BOSS was
+    // asserted, taking three slots so it cannot be miscounted.
+    //
+    // Deliberately slow, because the point is for a person to count them by
+    // eye: each slot is ~1.2 s at 7 MHz, so a blink is 0.6 s on and 0.6 s off
+    // and the whole cycle is about 19 s. Widen dled if it needs to be slower
+    // still -- bit 22 sets the blink rate and bits 26:23 the slot.
+    wire dled_short = (dled[26:23] < {1'b0, dstage}) & dled[22];
+    wire dled_long  = arb_cpu & (dled[26:23] >= {1'b0, dstage} + 4'd2)
+                              & (dled[26:23] <  {1'b0, dstage} + 4'd5);
+    wire dled_on    = dma_ever ? (|dma_str) : (dled_short | dled_long);
+    assign SD_SS_n = ~dled_on;                   // LED lights when SS is low
+
     // ---- parked -------------------------------------------------------------
     assign FLASH_OE_n      = 1'b1;
     assign FLASH_WE_n      = 1'b1;   // also the FPGA TEST_N pin -- keep high
     assign FLASH_A19       = 1'b0;
 
-    wire _unused = &{1'b0, OSC_CLK, BERR_n, IPL_n, INT2_n_IN, INT6_n, BGACK_n,
+    wire _unused = &{1'b0, OSC_CLK, BERR_n, IPL_n, INT2_n_IN, INT6_n,
                      BG_68SEC000_n, JP1, JP3, pll_inst1_CLKOUT0,
                      AS_MB_n_IN, BR_n_IN, VMA_n_IN, HLT_n_IN, 1'b0};
 
